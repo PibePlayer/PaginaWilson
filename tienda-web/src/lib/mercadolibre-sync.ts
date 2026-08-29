@@ -12,16 +12,25 @@ interface SearchResponse {
   };
 }
 
+interface MercadoLibrePicture {
+  id: string;
+  url: string;
+  secure_url: string;
+  size: string;
+  max_size: string;
+}
+
 interface MercadoLibreItem {
   id: string;
   title: string;
   price: number;
   currency_id: string;
   available_quantity: number;
-  category_id: string;
   thumbnail: string;
   permalink: string;
   status: string;
+  category_id: string;
+  pictures: MercadoLibrePicture[];
 }
 
 interface MercadoLibreMultiGetResult {
@@ -115,11 +124,16 @@ export async function syncMercadoLibreProducts() {
             meliPrice: item.price,
             currencyId: item.currency_id,
             availableQuantity: item.available_quantity,
-            thumbnail: item.thumbnail,
+
+            thumbnail:
+              item.pictures?.[0]?.secure_url ??
+              item.thumbnail,
+
             permalink: item.permalink,
             status: item.status,
-            categoryId: item.category_id,
             visible: true,
+            featured: false,
+            categoryId: item.category_id,
             updatedAt: new Date(),
           };
 
@@ -129,7 +143,24 @@ export async function syncMercadoLibreProducts() {
                 meliId: item.id,
               },
               update: {
-                $set: product,
+                $set: {
+                  meliId: item.id,
+                  title: item.title,
+                  meliPrice: item.price,
+                  currencyId: item.currency_id,
+                  availableQuantity: item.available_quantity,
+                  thumbnail:
+                    item.pictures?.[0]?.secure_url ??
+                    item.thumbnail,
+                  permalink: item.permalink,
+                  status: item.status,
+                  visible: true,
+                  categoryId: item.category_id,
+                  updatedAt: new Date(),
+                },
+                $setOnInsert: {
+                  featured: false,
+                },
               },
               upsert: true,
             },
