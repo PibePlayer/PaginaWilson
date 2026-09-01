@@ -30,10 +30,13 @@ export default async function Home() {
   }));
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
-      <section className="mx-auto max-w-7xl px-6 pb-16 pt-24">
+    <main className="min-h-screen bg-zinc-100 text-zinc-950">
+
+      {/* Hero */}
+      <section className="mx-auto max-w-7xl px-6 pb-16 pt-32">
         <div className="max-w-3xl">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-green-400">
+
+          <p className="mb-4 text-sm font-bold uppercase text-emerald-600">
             Tecnología & Servicio Técnico
           </p>
 
@@ -41,28 +44,33 @@ export default async function Home() {
             Tecnología al mejor precio.
           </h1>
 
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-500">
             Encontrá notebooks, smartwatches y tecnología seleccionada.
             Consultá directamente por WhatsApp y obtené nuestro precio web.
           </p>
+
         </div>
       </section>
 
+      {/* Productos destacados */}
       <section className="mx-auto max-w-7xl px-6 pb-24">
+
         <div className="mb-8 flex items-end justify-between">
           <div>
-            <p className="text-sm font-medium uppercase tracking-wider text-zinc-500">
+
+            <p className="text-sm font-bold uppercase tracking-wider text-zinc-500">
               Selección
             </p>
 
             <h2 className="mt-2 text-3xl font-bold">
               Productos destacados
             </h2>
+
           </div>
         </div>
 
         {featuredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {featuredProducts.map((product) => (
               <ProductCard
                 key={product.meliId}
@@ -72,12 +80,14 @@ export default async function Home() {
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center">
-            <p className="text-zinc-400">
+            <p className="font-proxima text-zinc-400">
               Todavía no hay productos destacados.
             </p>
           </div>
         )}
+
       </section>
+
     </main>
   );
 }

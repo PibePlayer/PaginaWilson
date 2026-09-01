@@ -1,6 +1,7 @@
 import { getDatabase } from "@/lib/db";
 import { mercadoLibreFetch } from "@/lib/mercadolibre";
 import type { Product } from "@/types/product";
+import type { Category } from "@/types/category";
 
 interface SearchResponse {
   seller_id: string;
@@ -40,6 +41,72 @@ interface MercadoLibreMultiGetResult {
 
 interface MercadoLibreIntegration {
   userId: number;
+}
+
+interface MercadoLibreCategory {
+  id: string;
+  name: string;
+}
+
+const categoryCache = new Map<string, string>();
+
+async function getMercadoLibreCategoryName( categoryId: string ): Promise<string> {
+  const cached = categoryCache.get(categoryId);
+
+  if (cached) {
+    return cached;
+  }
+
+  const db = await getDatabase();
+
+  const categoriesCollection =
+    db.collection<Category>("categories");
+
+  // Primero buscamos nuestra categoría
+  const existingCategory =
+    await categoriesCollection.findOne({
+      categoryId,
+    });
+
+  if (existingCategory){
+    categoryCache.set(
+      categoryId,
+      existingCategory.name
+    );
+
+    return existingCategory.name;
+  }
+
+  // Si no existe, la obtenemos desde MercadoLibre
+  const category =
+    await mercadoLibreFetch<MercadoLibreCategory>(
+      `/categories/${categoryId}`
+    );
+
+  await categoriesCollection.updateOne(
+    {
+      categoryId,
+    },
+    {
+      $set: {
+        meliName: category.name,
+        updatedAt: new Date(),
+      },
+      $setOnInsert: {
+        name: category.name,
+      },
+    },
+    {
+      upsert: true,
+    }
+  );
+
+  categoryCache.set(
+    categoryId,
+    category.name
+  );
+
+  return category.name;
 }
 
 async function getMercadoLibreIntegration(): Promise<MercadoLibreIntegration> {
@@ -108,64 +175,58 @@ export async function syncMercadoLibreProducts() {
         `/items?ids=${encodeURIComponent(ids.join(","))}`
       );
 
-      const operations = multiGet
-        .filter((result) => {
-          return result.code === 200 && result.body;
-        })
-        .filter((result) => {
-          return result.body?.status === "active";
-        })
-        .map((result) => {
-          const item = result.body!;
+      const operations = [];
 
-          const product: Product = {
-            meliId: item.id,
-            title: item.title,
-            meliPrice: item.price,
-            currencyId: item.currency_id,
-            availableQuantity: item.available_quantity,
+      for (const result of multiGet) {
+        if (result.code !== 200 || !result.body) {
+          continue;
+        }
 
-            thumbnail:
-              item.pictures?.[0]?.secure_url ??
-              item.thumbnail,
+        const item = result.body;
 
-            permalink: item.permalink,
-            status: item.status,
-            visible: true,
-            featured: false,
-            categoryId: item.category_id,
-            updatedAt: new Date(),
-          };
+        if (item.status !== "active") {
+          continue;
+        }
 
-          return {
-            updateOne: {
-              filter: {
-                meliId: item.id,
-              },
-              update: {
-                $set: {
-                  meliId: item.id,
-                  title: item.title,
-                  meliPrice: item.price,
-                  currencyId: item.currency_id,
-                  availableQuantity: item.available_quantity,
-                  thumbnail:
-                    item.pictures?.[0]?.secure_url ??
-                    item.thumbnail,
-                  permalink: item.permalink,
-                  status: item.status,
-                  visible: true,
-                  categoryId: item.category_id,
-                  updatedAt: new Date(),
-                },
-                $setOnInsert: {
-                  featured: false,
-                },
-              },
-              upsert: true,
+        const categoryName = await getMercadoLibreCategoryName(
+          item.category_id
+        );
+
+        operations.push({
+          updateOne: {
+            filter: {
+              meliId: item.id,
             },
-          };
+            update: {
+              $set: {
+                meliId: item.id,
+                title: item.title,
+                meliPrice: item.price,
+                currencyId: item.currency_id,
+                availableQuantity: item.available_quantity,
+
+                thumbnail:
+                  item.pictures?.[0]?.secure_url ??
+                  item.thumbnail,
+
+                permalink: item.permalink,
+                status: item.status,
+                visible: true,
+
+                categoryId: item.category_id,
+                categoryName,
+
+                updatedAt: new Date(),
+              },
+
+              $setOnInsert: {
+                featured: false,
+              },
+            },
+            upsert: true,
+          },
         });
+      }
 
       if (operations.length > 0) {
         await productsCollection.bulkWrite(operations);

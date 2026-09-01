@@ -1,7 +1,8 @@
 import type { Product } from "@/types/product";
 
 interface ProductCardProps {
-  product: Product & {
+  product: Omit<Product, "updatedAt"> & {
+    updatedAt: string;
     webPrice: number;
     discountPercent: number;
   };
@@ -17,17 +18,19 @@ export default function ProductCard({
   );
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+    <article className="font-proxima group flex h-full min-w-[300px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+
       {/* Imagen */}
-      <div className="relative aspect-square overflow-hidden bg-white">
+      <div className="relative aspect-[4/3] overflow-hidden bg-white">
         <img
           src={product.thumbnail}
           alt={product.title}
-          className="h-full w-full object-contain p-6 transition duration-300 group-hover:scale-105"
+          className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105"
         />
 
+        {/* Descuento */}
         {product.discountPercent > 0 && (
-          <span className="absolute left-4 top-4 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">
+          <span className="absolute right-4 top-4 rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm">
             -{product.discountPercent}%
           </span>
         )}
@@ -35,71 +38,74 @@ export default function ProductCard({
 
       {/* Información */}
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="line-clamp-2 min-h-10 text-sm font-medium text-zinc-900">
+
+        {/* Nombre */}
+        <h3 className="line-clamp-2 min-h-10 text-base font-bold leading-5 text-zinc-900">
           {product.title}
         </h3>
 
-        <div className="mt-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Precio MercadoLibre
-          </p>
+        {/* Precios */}
+        <div className="mt-5 overflow-hidden rounded-xl border border-zinc-200">
+          <div className="grid grid-cols-2">
 
-          <p className="mt-1 text-sm text-zinc-400 line-through">
-            ${product.meliPrice.toLocaleString("es-AR")}
-          </p>
+            {/* MercadoLibre */}
+            <div className="border-r border-zinc-200 bg-zinc-50 px-4 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                MercadoLibre
+              </p>
 
-          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-emerald-600">
-            Precio web
-          </p>
+              <p className="mt-1 text-base font-bold text-zinc-400 line-through">
+                ${product.meliPrice.toLocaleString("es-AR")}
+              </p>
+            </div>
 
-          <p className="mt-1 text-2xl font-bold text-zinc-950">
-            ${product.webPrice.toLocaleString("es-AR")}
-          </p>
+            {/* Precio Web */}
+            <div className="bg-emerald-600 px-4 py-3 text-white">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-white/90">
+                Precio Web
+              </p>
 
-          {product.discountPercent > 0 && (
-            <p className="mt-1 text-xs text-zinc-500">
-              Ahorrás{" "}
-              <span className="font-semibold text-emerald-600">
-                {product.discountPercent}%
-              </span>{" "}
-              comprando directamente con nosotros.
-            </p>
-          )}
+              <p className="mt-1 text-xl font-bold tracking-tight text-white">
+                ${product.webPrice.toLocaleString("es-AR")}
+              </p>
+            </div>
+
+          </div>
         </div>
+
+        {/* Aclaración */}
+        <p className="mt-2 text-xs font-bold text-zinc-500">
+          Precio especial comprando por nuestra web.
+        </p>
 
         {/* Botones */}
         <div className="mt-auto space-y-2 pt-5">
+
+          {/* WhatsApp */}
           {whatsappPhone && (
             <a
               href={`https://wa.me/${whatsappPhone}?text=${whatsappMessage}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="block rounded-xl bg-green-500 px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-green-600"
+              className="flex items-center justify-center gap-2 rounded-xl bg-green-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-green-600 active:scale-[0.98]"
             >
+              <img
+              src="/whatsapp.svg"
+              alt=""
+              aria-hidden="true"
+              className="h-6 w-6"
+              />
+
               Consultar por WhatsApp
             </a>
           )}
 
+          {/* MercadoLibre */}
           <a
             href={product.permalink}
             target="_blank"
             rel="noopener noreferrer"
-            className="
-              flex
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              bg-[#FFE600]
-              px-4
-              py-3
-              text-sm
-              font-semibold
-              text-[#333333]
-              transition
-              hover:bg-[#F5D900]
-              active:scale-[0.98]
-            "
+            className="flex items-center justify-center gap-2 rounded-xl bg-[#FFE600] px-4 py-3 text-sm font-bold text-[#333333] transition hover:bg-[#F5D900] active:scale-[0.98]"
           >
             <img
               src="/mercadolibre.svg"
@@ -110,6 +116,7 @@ export default function ProductCard({
 
             Ver en MercadoLibre
           </a>
+
         </div>
       </div>
     </article>
