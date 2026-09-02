@@ -389,15 +389,17 @@ export default function ProductCatalog({
         ref={filtersRef}
         className="relative mb-8"
       >
-        <button
-          type="button"
-          onClick={() =>
-            setFiltersOpen(
-              (current) => !current
-            )
-          }
-          className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 font-proxima text-sm font-bold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50"
-        >
+          <button
+            type="button"
+            onClick={() =>
+              setFiltersOpen((current) => !current)
+            }
+            className={`group flex items-center gap-2 rounded-xl border bg-white px-4 py-2 font-proxima text-sm font-bold text-zinc-700 shadow-sm transition-all duration-200 ease-out hover:border-zinc-400 hover:bg-zinc-50 ${
+              filtersOpen
+                ? "border-zinc-400 shadow-md"
+                : "border-zinc-300"
+            }`}
+          >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -427,10 +429,8 @@ export default function ProductCatalog({
             viewBox="0 0 24 24"
             strokeWidth={2}
             stroke="currentColor"
-            className={`h-4 w-4 transition-transform ${
-              filtersOpen
-                ? "rotate-180"
-                : ""
+            className={`h-4 w-4 transition-transform duration-200 ease-out ${
+              filtersOpen ? "rotate-180" : "rotate-0"
             }`}
           >
             <path
@@ -441,90 +441,94 @@ export default function ProductCatalog({
           </svg>
         </button>
 
-        {filtersOpen && (
-          <div className="absolute left-0 top-full z-30 mt-2 w-[min(92vw,420px)] rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl">
-            <div className="mb-3">
-              <p className="font-proxima text-sm font-bold text-zinc-900">
-                Filtrar por precio
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              {/* Precio mínimo */}
-              <div className="min-w-0 flex-1">
-                <label
-                  htmlFor="min-price"
-                  className="mb-1.5 block font-proxima text-xs font-bold text-zinc-500"
-                >
-                  Desde
-                </label>
-
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-proxima text-sm font-bold text-zinc-400">
-                    $
-                  </span>
-
-                  <input
-                    id="min-price"
-                    type="number"
-                    min="0"
-                    value={minPriceInput}
-                    onChange={(event) =>
-                      setMinPriceInput(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Mínimo"
-                    className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-7 pr-3 font-proxima text-sm font-bold text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
-                  />
-                </div>
-              </div>
-
-              {/* Precio máximo */}
-              <div className="min-w-0 flex-1">
-                <label
-                  htmlFor="max-price"
-                  className="mb-1.5 block font-proxima text-xs font-bold text-zinc-500"
-                >
-                  Hasta
-                </label>
-
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-proxima text-sm font-bold text-zinc-400">
-                    $
-                  </span>
-
-                  <input
-                    id="max-price"
-                    type="number"
-                    min="0"
-                    value={maxPriceInput}
-                    onChange={(event) =>
-                      setMaxPriceInput(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Máximo"
-                    className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-7 pr-3 font-proxima text-sm font-bold text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  void handleApplyPriceFilters()
-                }
-                disabled={loading}
-                className="shrink-0 rounded-lg bg-zinc-950 px-4 py-2 font-proxima text-sm font-bold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading
-                  ? "Aplicando..."
-                  : "Aplicar"}
-              </button>
-            </div>
+        <div
+          className={`absolute left-0 top-full z-30 mt-2 w-[min(92vw,420px)] origin-top-left rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl transition-all duration-200 ease-out ${
+            filtersOpen
+              ? "translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-2 scale-95 opacity-0"
+          }`}
+        >
+          <div className="mb-3">
+            <p className="font-proxima text-sm font-bold text-zinc-900">
+              Filtrar por precio
+            </p>
           </div>
-        )}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            {/* Precio mínimo */}
+            <div className="min-w-0 flex-1">
+              <label
+                htmlFor="min-price"
+                className="mb-1.5 block font-proxima text-xs font-bold text-zinc-500"
+              >
+                Desde
+              </label>
+
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-proxima text-sm font-bold text-zinc-400">
+                  $
+                </span>
+
+                <input
+                  id="min-price"
+                  type="number"
+                  min="0"
+                  value={minPriceInput}
+                  onChange={(event) =>
+                    setMinPriceInput(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Mínimo"
+                  className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-7 pr-3 font-proxima text-sm font-bold text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+                />
+              </div>
+            </div>
+
+            {/* Precio máximo */}
+            <div className="min-w-0 flex-1">
+              <label
+                htmlFor="max-price"
+                className="mb-1.5 block font-proxima text-xs font-bold text-zinc-500"
+              >
+                Hasta
+              </label>
+
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-proxima text-sm font-bold text-zinc-400">
+                  $
+                </span>
+
+                <input
+                  id="max-price"
+                  type="number"
+                  min="0"
+                  value={maxPriceInput}
+                  onChange={(event) =>
+                    setMaxPriceInput(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Máximo"
+                  className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-7 pr-3 font-proxima text-sm font-bold text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                void handleApplyPriceFilters()
+              }
+              disabled={loading}
+              className="shrink-0 rounded-lg bg-zinc-950 px-4 py-2 font-proxima text-sm font-bold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading
+                ? "Aplicando..."
+                : "Aplicar"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Productos */}
