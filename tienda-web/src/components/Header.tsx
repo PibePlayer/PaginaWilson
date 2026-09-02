@@ -186,7 +186,7 @@ useEffect(() => {
             href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_PHONE}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden items-center gap-2 rounded-xl bg-green-500 px-4 py-2.5 font-proxima text-sm font-bold text-white transition hover:bg-green-700 md:flex"
+            className="hidden items-center gap-2 rounded-xl bg-green-500 px-4 py-2.5 font-proxima text-sm font-bold text-white transition hover:bg-green-600 md:flex"
           >
             <img
               src="/whatsapp.svg"
