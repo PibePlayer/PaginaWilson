@@ -1,60 +1,71 @@
-import { getDatabase } from "@/lib/db";
+import { withDatabase } from "@/lib/db";
 import { getMeliDiscountPercent } from "@/lib/settings";
 import { calculateWebPrice } from "@/lib/pricing";
 import type { Product } from "@/types/product";
 import type { Category } from "@/types/category";
 import ProductCatalog from "@/components/ProductCatalog";
 
+const PAGE_SIZE = 12;
+
 export default async function ProductsPage() {
-  const db = await getDatabase();
+  const { formattedProducts, formattedCategories, total } =
+    await withDatabase(async (db) => {
+      const discountPercent = await getMeliDiscountPercent(db);
+      const productsCollection =
+        db.collection<Product>("products");
 
-  const discountPercent = await getMeliDiscountPercent();
+      const [products, total, categories] =
+        await Promise.all([
+          productsCollection
+            .find({
+              visible: true,
+            })
+            .sort({
+              title: 1,
+            })
+            .limit(PAGE_SIZE)
+            .toArray(),
 
-  const products = await db
-    .collection<Product>("products")
-    .find({
-      visible: true,
-    })
-    .sort({
-      title: 1,
-    })
-    .toArray();
+          productsCollection.countDocuments({
+            visible: true,
+          }),
 
-  const categories = await db
-    .collection<Category>("categories")
-    .find({})
-    .sort({
-      name: 1,
-    })
-    .toArray();
+          db
+            .collection<Category>("categories")
+            .find({})
+            .sort({
+              name: 1,
+            })
+            .toArray(),
+        ]);
 
-  const formattedProducts = products.map((product) => ({
-    meliId: product.meliId,
-    title: product.title,
-    meliPrice: product.meliPrice,
-    currencyId: product.currencyId,
-    availableQuantity: product.availableQuantity,
-    thumbnail: product.thumbnail,
-    permalink: product.permalink,
-    status: product.status,
-    visible: product.visible,
-    featured: product.featured,
-    categoryId: product.categoryId,
-    updatedAt: product.updatedAt.toISOString(),
-
-    webPrice: calculateWebPrice(
-        product.meliPrice,
-        discountPercent
-    ),
-    discountPercent,
-  }));
-
-  const formattedCategories = categories.map((category) => ({
-    categoryId: category.categoryId,
-    meliName: category.meliName,
-    name: category.name,
-    updatedAt: category.updatedAt.toISOString(),
-  }));
+      return {
+        formattedProducts: products.map((product) => ({
+          meliId: product.meliId,
+          title: product.title,
+          meliPrice: product.meliPrice,
+          currencyId: product.currencyId,
+          availableQuantity: product.availableQuantity,
+          thumbnail: product.thumbnail,
+          permalink: product.permalink,
+          status: product.status,
+          visible: product.visible,
+          featured: product.featured,
+          categoryId: product.categoryId,
+          updatedAt: product.updatedAt.toISOString(),
+          webPrice: calculateWebPrice(
+            product.meliPrice,
+            discountPercent
+          ),
+          discountPercent,
+        })),
+        formattedCategories: categories.map((category) => ({
+          categoryId: category.categoryId,
+          name: category.name,
+        })),
+        total,
+      };
+    });
 
   return (
     <main className="min-h-screen bg-zinc-100 pt-24">
@@ -70,13 +81,15 @@ export default async function ProductsPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl font-proxima text-base font-bold text-zinc-500">
-            Explorá nuestro catálogo y encontrá el producto que estás buscando.
+            Explorá nuestro catálogo y encontrá el
+            producto que estás buscando.
           </p>
         </div>
 
         <ProductCatalog
-          products={formattedProducts}
+          initialProducts={formattedProducts}
           categories={formattedCategories}
+          initialTotal={total}
         />
 
       </section>

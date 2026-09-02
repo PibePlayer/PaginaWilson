@@ -1,4 +1,4 @@
-import { getDatabase } from "@/lib/db";
+import { withDatabase } from "@/lib/db";
 import { mercadoLibreFetch } from "@/lib/mercadolibre";
 
 interface MercadoLibreCategory {
@@ -12,30 +12,32 @@ interface MercadoLibreCategory {
 }
 
 export async function getOrCreateCategory(categoryId: string) {
-  const db = await getDatabase();
+  return withDatabase(async (db) => {
+    const existing = await db.collection("categories").findOne({
+      meliId: categoryId,
+    });
 
-  const existing = await db.collection("categories").findOne({
-    meliId: categoryId,
+    if (existing) {
+      return existing;
+    }
+
+    const category =
+      await mercadoLibreFetch<MercadoLibreCategory>(
+        `/categories/${categoryId}`,
+        undefined,
+        db
+      );
+
+    const document = {
+      meliId: category.id,
+      name: category.name,
+      picture: category.picture,
+      pathFromRoot: category.path_from_root,
+      updatedAt: new Date(),
+    };
+
+    await db.collection("categories").insertOne(document);
+
+    return document;
   });
-
-  if (existing) {
-    return existing;
-  }
-
-  const category =
-    await mercadoLibreFetch<MercadoLibreCategory>(
-      `/categories/${categoryId}`
-    );
-
-  const document = {
-    meliId: category.id,
-    name: category.name,
-    picture: category.picture,
-    pathFromRoot: category.path_from_root,
-    updatedAt: new Date(),
-  };
-
-  await db.collection("categories").insertOne(document);
-
-  return document;
 }

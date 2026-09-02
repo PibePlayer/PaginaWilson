@@ -1,4 +1,5 @@
-import { getDatabase } from "@/lib/db";
+import type { Db } from "mongodb";
+import { withDatabase } from "@/lib/db";
 import { mercadoLibreFetch } from "@/lib/mercadolibre";
 import type { Product } from "@/types/product";
 import type { Category } from "@/types/category";
@@ -50,14 +51,15 @@ interface MercadoLibreCategory {
 
 const categoryCache = new Map<string, string>();
 
-async function getMercadoLibreCategoryName( categoryId: string ): Promise<string> {
+async function getMercadoLibreCategoryName(
+  db: Db,
+  categoryId: string
+): Promise<string> {
   const cached = categoryCache.get(categoryId);
 
   if (cached) {
     return cached;
   }
-
-  const db = await getDatabase();
 
   const categoriesCollection =
     db.collection<Category>("categories");
@@ -80,7 +82,9 @@ async function getMercadoLibreCategoryName( categoryId: string ): Promise<string
   // Si no existe, la obtenemos desde MercadoLibre
   const category =
     await mercadoLibreFetch<MercadoLibreCategory>(
-      `/categories/${categoryId}`
+      `/categories/${categoryId}`,
+      undefined,
+      db
     );
 
   await categoriesCollection.updateOne(
@@ -109,9 +113,9 @@ async function getMercadoLibreCategoryName( categoryId: string ): Promise<string
   return category.name;
 }
 
-async function getMercadoLibreIntegration(): Promise<MercadoLibreIntegration> {
-  const db = await getDatabase();
-
+async function getMercadoLibreIntegration(
+  db: Db
+): Promise<MercadoLibreIntegration> {
   const integration =
     await db.collection<MercadoLibreIntegration>("integrations").findOne({
       provider: "mercadolibre",
@@ -138,128 +142,121 @@ function chunk<T>(array: T[], size: number): T[][] {
 }
 
 export async function syncMercadoLibreProducts() {
-  const integration = await getMercadoLibreIntegration();
-  const db = await getDatabase();
+  return withDatabase(async (db) => {
+    const integration = await getMercadoLibreIntegration(db);
+    const productsCollection = db.collection<Product>("products");
+    const activeMeliIds: string[] = [];
+    const searchLimit = 100;
+    let offset = 0;
+    let total = 0;
+    let synced = 0;
 
-  const productsCollection = db.collection<Product>("products");
-
-  const activeMeliIds: string[] = [];
-
-  const searchLimit = 100;
-  let offset = 0;
-  let total = 0;
-  let synced = 0;
-
-  do {
-    const search = await mercadoLibreFetch<SearchResponse>(
-      `/users/${integration.userId}/items/search?status=active&limit=${searchLimit}&offset=${offset}`
-    );
-
-    total = search.paging.total;
-
-    if (search.results.length === 0) {
-      break;
-    }
-
-    // Guardamos todos los IDs activos.
-    activeMeliIds.push(...search.results);
-
-    /*
-     * MercadoLibre permite un máximo de 20 IDs por
-     * llamada al endpoint Multiget.
-     */
-    const idChunks = chunk(search.results, 20);
-
-    for (const ids of idChunks) {
-      const multiGet = await mercadoLibreFetch<MercadoLibreMultiGetResult[]>(
-        `/items?ids=${encodeURIComponent(ids.join(","))}`
+    do {
+      const search = await mercadoLibreFetch<SearchResponse>(
+        `/users/${integration.userId}/items/search?status=active&limit=${searchLimit}&offset=${offset}`,
+        undefined,
+        db
       );
 
-      const operations = [];
+      total = search.paging.total;
 
-      for (const result of multiGet) {
-        if (result.code !== 200 || !result.body) {
-          continue;
-        }
+      if (search.results.length === 0) {
+        break;
+      }
 
-        const item = result.body;
+      activeMeliIds.push(...search.results);
 
-        if (item.status !== "active") {
-          continue;
-        }
+      const idChunks = chunk(search.results, 20);
 
-        const categoryName = await getMercadoLibreCategoryName(
-          item.category_id
+      for (const ids of idChunks) {
+        const multiGet = await mercadoLibreFetch<MercadoLibreMultiGetResult[]>(
+          `/items?ids=${encodeURIComponent(ids.join(","))}`,
+          undefined,
+          db
         );
 
-        operations.push({
-          updateOne: {
-            filter: {
-              meliId: item.id,
-            },
-            update: {
-              $set: {
+        const operations = [];
+
+        for (const result of multiGet) {
+          if (result.code !== 200 || !result.body) {
+            continue;
+          }
+
+          const item = result.body;
+
+          if (item.status !== "active") {
+            continue;
+          }
+
+          const categoryName = await getMercadoLibreCategoryName(
+            db,
+            item.category_id
+          );
+
+          operations.push({
+            updateOne: {
+              filter: {
                 meliId: item.id,
-                title: item.title,
-                meliPrice: item.price,
-                currencyId: item.currency_id,
-                availableQuantity: item.available_quantity,
-
-                thumbnail:
-                  item.pictures?.[0]?.secure_url ??
-                  item.thumbnail,
-
-                permalink: item.permalink,
-                status: item.status,
-                visible: true,
-
-                categoryId: item.category_id,
-                categoryName,
-
-                updatedAt: new Date(),
               },
+              update: {
+                $set: {
+                  meliId: item.id,
+                  title: item.title,
+                  meliPrice: item.price,
+                  currencyId: item.currency_id,
+                  availableQuantity: item.available_quantity,
 
-              $setOnInsert: {
-                featured: false,
+                  thumbnail:
+                    item.pictures?.[0]?.secure_url ??
+                    item.thumbnail,
+
+                  permalink: item.permalink,
+                  status: item.status,
+                  visible: true,
+
+                  categoryId: item.category_id,
+                  categoryName,
+
+                  updatedAt: new Date(),
+                },
+
+                $setOnInsert: {
+                  featured: false,
+                },
               },
+              upsert: true,
             },
-            upsert: true,
-          },
-        });
+          });
+        }
+
+        if (operations.length > 0) {
+          await productsCollection.bulkWrite(operations);
+          synced += operations.length;
+        }
       }
 
-      if (operations.length > 0) {
-        await productsCollection.bulkWrite(operations);
-        synced += operations.length;
+      offset += search.results.length;
+    } while (offset < total);
+
+    const deactivateResult = await productsCollection.updateMany(
+      {
+        meliId: {
+          $nin: activeMeliIds,
+        },
+        visible: true,
+      },
+      {
+        $set: {
+          visible: false,
+          updatedAt: new Date(),
+        },
       }
-    }
+    );
 
-    offset += search.results.length;
-  } while (offset < total);
-
-  /*
-   * Todo producto que tengamos en MongoDB pero que ya no
-   * esté entre las publicaciones activas de MercadoLibre
-   * deja de estar visible.
-   */
-  const deactivateResult = await productsCollection.updateMany(
-    {
-      meliId: {
-        $nin: activeMeliIds,
-      },
-      visible: true,
-    },
-    {
-      $set: {
-        visible: false,
-        updatedAt: new Date(),
-      },
-    }
-  );
-
-  return {
-    total,
-    synced,
-    deactivated: deactivateResult.modifiedCount,
-  };
+    return {
+      total,
+      synced,
+      deactivated: deactivateResult.modifiedCount,
+    };
+  });
 }

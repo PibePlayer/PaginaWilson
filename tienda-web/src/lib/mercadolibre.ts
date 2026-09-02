@@ -1,4 +1,5 @@
-import { getDatabase } from "@/lib/db";
+import type { Db } from "mongodb";
+import { withDatabase } from "@/lib/db";
 
 const ML_API_URL = "https://api.mercadolibre.com";
 
@@ -20,9 +21,9 @@ type MercadoLibreTokenResponse = {
   refresh_token: string;
 };
 
-export async function getMercadoLibreIntegration(): Promise<MercadoLibreIntegration> {
-  const db = await getDatabase();
-
+async function findMercadoLibreIntegration(
+  db: Db
+): Promise<MercadoLibreIntegration> {
   const integration = await db.collection<MercadoLibreIntegration>(
     "integrations"
   ).findOne({
@@ -36,8 +37,19 @@ export async function getMercadoLibreIntegration(): Promise<MercadoLibreIntegrat
   return integration;
 }
 
+export async function getMercadoLibreIntegration(
+  db?: Db
+): Promise<MercadoLibreIntegration> {
+  if (db) {
+    return findMercadoLibreIntegration(db);
+  }
+
+  return withDatabase(findMercadoLibreIntegration);
+}
+
 async function refreshMercadoLibreToken(
-  integration: MercadoLibreIntegration
+  integration: MercadoLibreIntegration,
+  db: Db
 ): Promise<string> {
   const clientId = process.env.MERCADOLIBRE_CLIENT_ID;
   const clientSecret = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -70,8 +82,6 @@ async function refreshMercadoLibreToken(
     throw new Error("Could not refresh MercadoLibre token");
   }
 
-  const db = await getDatabase();
-
   await db.collection<MercadoLibreIntegration>("integrations").updateOne(
     {
       provider: "mercadolibre",
@@ -92,8 +102,16 @@ async function refreshMercadoLibreToken(
   return data.access_token;
 }
 
-export async function getValidMercadoLibreAccessToken(): Promise<string> {
-  const integration = await getMercadoLibreIntegration();
+export async function getValidMercadoLibreAccessToken(
+  db?: Db
+): Promise<string> {
+  if (!db) {
+    return withDatabase((database) =>
+      getValidMercadoLibreAccessToken(database)
+    );
+  }
+
+  const integration = await getMercadoLibreIntegration(db);
 
   // Renovamos con un margen de seguridad de 5 minutos.
   const expiresSoon =
@@ -103,14 +121,15 @@ export async function getValidMercadoLibreAccessToken(): Promise<string> {
     return integration.accessToken;
   }
 
-  return refreshMercadoLibreToken(integration);
+  return refreshMercadoLibreToken(integration, db);
 }
 
 export async function mercadoLibreFetch<T>(
   endpoint: string,
-  options?: RequestInit
+  options?: RequestInit,
+  db?: Db
 ): Promise<T> {
-  const accessToken = await getValidMercadoLibreAccessToken();
+  const accessToken = await getValidMercadoLibreAccessToken(db);
 
   const response = await fetch(`${ML_API_URL}${endpoint}`, {
     ...options,

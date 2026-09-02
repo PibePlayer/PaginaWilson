@@ -7,3 +7,8 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// Inicializa los enlaces de Cloudflare durante el desarrollo local.
+import("@opennextjs/cloudflare").then((module) =>
+  module.initOpenNextCloudflareForDev()
+);

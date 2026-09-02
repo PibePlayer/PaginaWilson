@@ -1,31 +1,31 @@
 import { MongoClient } from "mongodb";
 
-const uri = process.env.MONGODB_URI;
+export type MongoConnectionMode = "workers" | "pooled";
 
-if (!uri) {
-  throw new Error("MONGODB_URI is not defined");
-}
+export function getMongoConnectionMode(): MongoConnectionMode {
+  const mode = process.env.MONGODB_CONNECTION_MODE ?? "workers";
 
-const options = {};
-
-let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
-
-declare global {
-  // eslint-disable-next-line no-var
-  var _mongoClientPromise: Promise<MongoClient> | undefined;
-}
-
-if (process.env.NODE_ENV === "development") {
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect();
+  if (mode === "workers" || mode === "pooled") {
+    return mode;
   }
 
-  clientPromise = global._mongoClientPromise;
-} else {
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+  throw new Error(
+    "MONGODB_CONNECTION_MODE must be either 'workers' or 'pooled'"
+  );
 }
 
-export default clientPromise;
+export function createMongoClient() {
+  const uri = process.env.MONGODB_URI;
+
+  if (!uri) {
+    throw new Error("MONGODB_URI is not defined");
+  }
+
+  return new MongoClient(uri, {
+    connectTimeoutMS: 10_000,
+    serverSelectionTimeoutMS: 10_000,
+    socketTimeoutMS: 15_000,
+    maxPoolSize: 1,
+    minPoolSize: 0,
+  });
+}

@@ -1,0 +1,12 @@
+# Copiá este archivo como .dev.vars y completá los valores solo en tu máquina.
+# Nunca subas .dev.vars ni .env.local a Git.
+NEXTJS_ENV=development
+MONGODB_CONNECTION_MODE=workers
+MONGODB_URI=
+MONGODB_USERNAME=
+MONGODB_PASSWORD=
+MERCADOLIBRE_CLIENT_ID=
+MERCADOLIBRE_CLIENT_SECRET=
+MERCADOLIBRE_REDIRECT_URI=
+NEXT_PUBLIC_WHATSAPP_PHONE=
+ADMIN_SYNC_SECRET=

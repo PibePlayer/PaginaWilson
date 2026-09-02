@@ -1,33 +1,45 @@
 import ProductCard from "@/components/ProductCard";
-import { getDatabase } from "@/lib/db";
+import { withDatabase } from "@/lib/db";
 import { getMeliDiscountPercent } from "@/lib/settings";
 import { calculateWebPrice } from "@/lib/pricing";
 import type { Product } from "@/types/product";
 
 export default async function Home() {
-  const db = await getDatabase();
-  const discountPercent = await getMeliDiscountPercent();
+  const featuredProducts = await withDatabase(async (db) => {
+    const discountPercent = await getMeliDiscountPercent(db);
 
-  const products = await db
-    .collection<Product>("products")
-    .find({
-      visible: true,
-      featured: true,
-    })
-    .sort({
-      updatedAt: -1,
-    })
-    .limit(8)
-    .toArray();
+    const products = await db
+      .collection<Product>("products")
+      .find({
+        visible: true,
+        featured: true,
+      })
+      .sort({
+        updatedAt: -1,
+      })
+      .limit(8)
+      .toArray();
 
-  const featuredProducts = products.map((product) => ({
-    ...product,
-    webPrice: calculateWebPrice(
-      product.meliPrice,
-      discountPercent
-    ),
-    discountPercent,
-  }));
+    return products.map((product) => ({
+      meliId: product.meliId,
+      title: product.title,
+      meliPrice: product.meliPrice,
+      currencyId: product.currencyId,
+      availableQuantity: product.availableQuantity,
+      thumbnail: product.thumbnail,
+      permalink: product.permalink,
+      status: product.status,
+      visible: product.visible,
+      featured: product.featured,
+      categoryId: product.categoryId,
+      updatedAt: product.updatedAt.toISOString(),
+      webPrice: calculateWebPrice(
+        product.meliPrice,
+        discountPercent
+      ),
+      discountPercent,
+    }));
+  });
 
   return (
     <main className="min-h-screen bg-zinc-100 text-zinc-950">

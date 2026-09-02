@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDatabase } from "@/lib/db";
+import { withDatabase } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -90,29 +90,29 @@ console.log("OAuth state:", {
     );
   }
 
-  const db = await getDatabase();
-
-  await db.collection("integrations").updateOne(
-    {
-      provider: "mercadolibre",
-      userId: tokenData.user_id,
-    },
-    {
-      $set: {
+  await withDatabase(async (db) => {
+    await db.collection("integrations").updateOne(
+      {
         provider: "mercadolibre",
         userId: tokenData.user_id,
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresAt: new Date(
-          Date.now() + tokenData.expires_in * 1000
-        ),
-        updatedAt: new Date(),
       },
-    },
-    {
-      upsert: true,
-    }
-  );
+      {
+        $set: {
+          provider: "mercadolibre",
+          userId: tokenData.user_id,
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: new Date(
+            Date.now() + tokenData.expires_in * 1000
+          ),
+          updatedAt: new Date(),
+        },
+      },
+      {
+        upsert: true,
+      }
+    );
+  });
 
   return NextResponse.json({
     success: true,

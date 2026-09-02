@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Wilson",
+  title: "Sogue",
   description: "Tecnología y servicio técnico",
 };
 

@@ -1,10 +1,10 @@
-import { getDatabase } from "@/lib/db";
+import type { Db } from "mongodb";
 
 const DEFAULT_DISCOUNT_PERCENT = 10;
 
-export async function getMeliDiscountPercent(): Promise<number> {
-  const db = await getDatabase();
-
+export async function getMeliDiscountPercent(
+  db: Db
+): Promise<number> {
   const settings = await db.collection("settings").findOne({
     key: "store",
   });
