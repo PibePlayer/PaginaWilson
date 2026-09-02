@@ -70,28 +70,11 @@ export default async function ProductsPage() {
   return (
     <main className="min-h-screen bg-zinc-100 pt-24">
       <section className="mx-auto max-w-7xl px-6 pb-24">
-
-        <div className="mb-10">
-          <p className="font-proxima text-sm font-bold uppercase tracking-wider text-emerald-600">
-            Catálogo
-          </p>
-
-          <h1 className="mt-2 font-proxima text-4xl font-bold tracking-tight text-zinc-950">
-            Todos los productos
-          </h1>
-
-          <p className="mt-3 max-w-2xl font-proxima text-base font-bold text-zinc-500">
-            Explorá nuestro catálogo y encontrá el
-            producto que estás buscando.
-          </p>
-        </div>
-
         <ProductCatalog
           initialProducts={formattedProducts}
           categories={formattedCategories}
           initialTotal={total}
         />
-
       </section>
     </main>
   );
