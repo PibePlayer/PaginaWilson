@@ -5,11 +5,35 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function Header() {
-  const [visible, setVisible] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [search, setSearch] = useState("");
-
   const router = useRouter();
+
+const [visible, setVisible] = useState(true);
+const [menuOpen, setMenuOpen] = useState(false);
+const [search, setSearch] = useState("");
+
+useEffect(() => {
+  const updateSearchFromUrl = () => {
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    setSearch(params.get("search") || "");
+    };
+
+    updateSearchFromUrl();
+
+    window.addEventListener(
+      "popstate",
+      updateSearchFromUrl
+    );
+
+    return () => {
+      window.removeEventListener(
+        "popstate",
+        updateSearchFromUrl
+      );
+    };
+  }, []);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -54,9 +78,13 @@ export default function Header() {
     const query = search.trim();
 
     if (!query) {
+      setSearch("");
       router.push("/productos");
+      setMenuOpen(false);
       return;
     }
+
+    setSearch(query);
 
     router.push(
       `/productos?search=${encodeURIComponent(query)}`

@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 
+import { useRouter } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
 
 interface Product {
@@ -34,6 +35,10 @@ interface ProductCatalogProps {
   initialProducts: Product[];
   categories: Category[];
   initialTotal: number;
+  initialSearch: string;
+  initialCategoryId: string;
+  initialMinPrice: string;
+  initialMaxPrice: string;
 }
 
 interface AppliedFilters {
@@ -47,28 +52,31 @@ export default function ProductCatalog({
   initialProducts,
   categories,
   initialTotal,
+  initialSearch,
+  initialCategoryId,
+  initialMinPrice,
+  initialMaxPrice,
 }: ProductCatalogProps) {
+  const router = useRouter();
+
   const [products, setProducts] =
     useState<Product[]>(initialProducts);
 
   const [selectedCategory, setSelectedCategory] =
-    useState<string>("all");
-
-  const [searchInput, setSearchInput] =
-    useState("");
+    useState<string>(initialCategoryId);
 
   const [minPriceInput, setMinPriceInput] =
-    useState("");
+    useState(initialMinPrice);
 
   const [maxPriceInput, setMaxPriceInput] =
-    useState("");
+    useState(initialMaxPrice);
 
   const [appliedFilters, setAppliedFilters] =
     useState<AppliedFilters>({
-      categoryId: "all",
-      search: "",
-      minPrice: "",
-      maxPrice: "",
+      categoryId: initialCategoryId,
+      search: initialSearch,
+      minPrice: initialMinPrice,
+      maxPrice: initialMaxPrice,
     });
 
   const [filtersOpen, setFiltersOpen] =
@@ -82,9 +90,50 @@ export default function ProductCatalog({
   const [loading, setLoading] =
     useState(false);
 
-  const filtersRef = useRef<HTMLDivElement>(null);
-  
+  const filtersRef =
+    useRef<HTMLDivElement>(null);
+
   const requestIdRef = useRef(0);
+
+  function updateUrl(filters: AppliedFilters) {
+    const params = new URLSearchParams();
+
+    if (filters.search) {
+      params.set("search", filters.search);
+    }
+
+    if (filters.categoryId !== "all") {
+      params.set(
+        "categoryId",
+        filters.categoryId
+      );
+    }
+
+    if (filters.minPrice) {
+      params.set(
+        "minPrice",
+        filters.minPrice
+      );
+    }
+
+    if (filters.maxPrice) {
+      params.set(
+        "maxPrice",
+        filters.maxPrice
+      );
+    }
+
+    const queryString = params.toString();
+
+    router.replace(
+      queryString
+        ? `/productos?${queryString}`
+        : "/productos",
+      {
+        scroll: false,
+      }
+    );
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -206,25 +255,6 @@ export default function ProductCatalog({
     }
   }
 
-  async function handleSearch() {
-    const filters: AppliedFilters = {
-      categoryId: selectedCategory,
-      search: searchInput.trim(),
-      minPrice: minPriceInput,
-      maxPrice: maxPriceInput,
-    };
-
-    setAppliedFilters(filters);
-
-    await loadProducts(
-      1,
-      filters,
-      false
-    );
-
-    setFiltersOpen(false);
-  }
-
   async function handleApplyPriceFilters() {
     const filters: AppliedFilters = {
       categoryId: selectedCategory,
@@ -234,6 +264,7 @@ export default function ProductCatalog({
     };
 
     setAppliedFilters(filters);
+    updateUrl(filters);
 
     await loadProducts(
       1,
@@ -250,11 +281,11 @@ export default function ProductCatalog({
     if (
       categoryId === selectedCategory
     ) {
-        if (categoryId === "all") {
-            return;
-        } else {
-            categoryId = "all";
-        }
+      if (categoryId === "all") {
+        return;
+      } else {
+        categoryId = "all";
+      }
     }
 
     setSelectedCategory(categoryId);
@@ -267,6 +298,7 @@ export default function ProductCatalog({
     };
 
     setAppliedFilters(filters);
+    updateUrl(filters);
 
     await loadProducts(
       1,
@@ -283,14 +315,6 @@ export default function ProductCatalog({
     );
   }
 
-  function handleSearchSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    void handleSearch();
-  }
-
   const activePriceFilters =
     Number(Boolean(appliedFilters.minPrice)) +
     Number(Boolean(appliedFilters.maxPrice));
@@ -298,52 +322,6 @@ export default function ProductCatalog({
   return (
     <>
       {/* Buscador */}
-      <div className="mb-5">
-        <form
-          onSubmit={handleSearchSubmit}
-          className="flex flex-col gap-2 sm:flex-row"
-        >
-          <div className="relative flex-1">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="m21 21-4.35-4.35m0 0A7.5 7.5 0 1 0 6.04 6.04a7.5 7.5 0 0 0 10.61 10.61Z"
-              />
-            </svg>
-
-            <input
-              id="product-search"
-              type="search"
-              value={searchInput}
-              onChange={(event) =>
-                setSearchInput(
-                  event.target.value
-                )
-              }
-              placeholder="Buscar productos..."
-              className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-12 pr-4 font-proxima text-sm font-bold text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-xl bg-zinc-950 px-7 py-2.5 font-proxima text-sm font-bold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading
-              ? "Buscando..."
-              : "Buscar"}
-          </button>
-        </form>
-      </div>
 
       {/* Categorías */}
       <div className="mb-4 flex flex-wrap gap-2.5">
@@ -407,7 +385,10 @@ export default function ProductCatalog({
       </div>
 
       {/* Filtros flotantes */}
-      <div ref={filtersRef} className="relative mb-8">
+      <div
+        ref={filtersRef}
+        className="relative mb-8"
+      >
         <button
           type="button"
           onClick={() =>
