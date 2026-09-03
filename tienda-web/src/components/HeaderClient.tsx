@@ -115,9 +115,14 @@ export default function HeaderClient({
           <Link
             href="/"
             onClick={closeMenu}
-            className="font-proxima text-xl font-bold tracking-tight text-zinc-950"
+            className="flex items-center"
+            aria-label="Sogue Note - Inicio"
           >
-            SOGUE
+            <img
+              src="/SogueLogo.jpeg"
+              alt="Sogue Note"
+              className="h-auto w-[115px] object-contain"
+            />
           </Link>
         </div>
 
