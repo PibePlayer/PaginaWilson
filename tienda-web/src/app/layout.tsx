@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { STORE_NAME, STORE_DESCRIPTION } from "@/lib/store-config";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import "./globals.css";
 import Header from "@/components/Header";
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sogue Notebooks",
-  description: "Tecnología y servicio técnico",
+  title: STORE_NAME,
+  description: STORE_DESCRIPTION,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

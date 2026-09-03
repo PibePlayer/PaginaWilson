@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { STORE_NAME } from "@/lib/store-config";
 
 export default function ServicioTecnicoPage() {
   const whatsappPhone =
@@ -157,7 +158,7 @@ export default function ServicioTecnicoPage() {
                 style={{ border: 0 }}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                title="Ubicación de SOGUE en Galería Jardín"
+                title={`Ubicación de ${STORE_NAME} en Galería Jardín`}
               />
             </div>
           </section>

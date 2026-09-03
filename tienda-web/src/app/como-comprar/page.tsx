@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { STORE_NAME } from "@/lib/store-config";
 
 const steps = [
   {
@@ -57,7 +58,7 @@ export default function ComoComprarPage() {
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-500">
-            Comprar en SOGUE es simple. Elegí el producto que
+            Comprar en {STORE_NAME} es simple. Elegí el producto que
             querés, consultanos por WhatsApp y coordinamos tu
             compra de forma rápida y sencilla.
           </p>

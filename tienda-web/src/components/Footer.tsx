@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { STORE_NAME, STORE_TAGLINE } from "@/lib/store-config";
 
 export default function Footer() {
   return (
@@ -11,11 +12,11 @@ export default function Footer() {
               href="/"
               className="font-proxima text-2xl font-bold tracking-tight"
             >
-              SOGUE NOTE
+              {STORE_NAME}
             </Link>
 
             <p className="mt-3 max-w-xs font-proxima text-sm leading-6 text-zinc-400">
-              Tecnología y soluciones para vos.
+              {STORE_TAGLINE}
             </p>
           </div>
 
@@ -38,13 +39,6 @@ export default function Footer() {
                 className="w-fit font-proxima text-sm text-zinc-400 transition hover:text-white"
               >
                 Botón de arrepentimiento
-              </Link>
-
-              <Link
-                href="/libro-de-quejas"
-                className="w-fit font-proxima text-sm text-zinc-400 transition hover:text-white"
-              >
-                Libro de Quejas Online
               </Link>
 
               <Link
@@ -133,11 +127,11 @@ export default function Footer() {
         {/* Copyright */}
         <div className="mt-6 flex flex-col gap-2 border-t border-zinc-800 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-proxima text-xs text-zinc-500">
-            © 2026 SOGUE NOTE. Todos los derechos reservados.
+            © {new Date().getFullYear()} {STORE_NAME}. Todos los derechos reservados.
           </p>
 
           <p className="font-proxima text-xs text-zinc-600">
-            SOGUE NOTE
+            {STORE_NAME}
           </p>
         </div>
       </div>
