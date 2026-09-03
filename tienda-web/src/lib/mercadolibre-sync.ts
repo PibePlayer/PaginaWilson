@@ -36,7 +36,8 @@ interface MercadoLibreItem {
 }
 
 interface MercadoLibreMultiGetResult {
-  code: number;
+  id: string;
+  status_code: number;
   body?: MercadoLibreItem;
 }
 
@@ -64,13 +65,13 @@ async function getMercadoLibreCategoryName(
   const categoriesCollection =
     db.collection<Category>("categories");
 
-  // Primero buscamos nuestra categoría
+  // Primero buscamos nuestra categoría.
   const existingCategory =
     await categoriesCollection.findOne({
       categoryId,
     });
 
-  if (existingCategory){
+  if (existingCategory) {
     categoryCache.set(
       categoryId,
       existingCategory.name
@@ -79,7 +80,7 @@ async function getMercadoLibreCategoryName(
     return existingCategory.name;
   }
 
-  // Si no existe, la obtenemos desde MercadoLibre
+  // Si no existe, la obtenemos desde MercadoLibre.
   const category =
     await mercadoLibreFetch<MercadoLibreCategory>(
       `/categories/${categoryId}`,
@@ -117,12 +118,16 @@ async function getMercadoLibreIntegration(
   db: Db
 ): Promise<MercadoLibreIntegration> {
   const integration =
-    await db.collection<MercadoLibreIntegration>("integrations").findOne({
-      provider: "mercadolibre",
-    });
+    await db
+      .collection<MercadoLibreIntegration>("integrations")
+      .findOne({
+        provider: "mercadolibre",
+      });
 
   if (!integration) {
-    throw new Error("MercadoLibre is not connected");
+    throw new Error(
+      "MercadoLibre is not connected"
+    );
   }
 
   return integration;
@@ -131,11 +136,20 @@ async function getMercadoLibreIntegration(
 /**
  * Divide un array en grupos.
  */
-function chunk<T>(array: T[], size: number): T[][] {
+function chunk<T>(
+  array: T[],
+  size: number
+): T[][] {
   const chunks: T[][] = [];
 
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
+  for (
+    let i = 0;
+    i < array.length;
+    i += size
+  ) {
+    chunks.push(
+      array.slice(i, i + size)
+    );
   }
 
   return chunks;
@@ -143,20 +157,28 @@ function chunk<T>(array: T[], size: number): T[][] {
 
 export async function syncMercadoLibreProducts() {
   return withDatabase(async (db) => {
-    const integration = await getMercadoLibreIntegration(db);
-    const productsCollection = db.collection<Product>("products");
+    const integration =
+      await getMercadoLibreIntegration(db);
+
+    const productsCollection =
+      db.collection<Product>("products");
+
     const activeMeliIds: string[] = [];
+
     const searchLimit = 100;
+    const itemBulkLimit = 20;
+
     let offset = 0;
     let total = 0;
     let synced = 0;
 
     do {
-      const search = await mercadoLibreFetch<SearchResponse>(
-        `/users/${integration.userId}/items/search?status=active&limit=${searchLimit}&offset=${offset}`,
-        undefined,
-        db
-      );
+      const search =
+        await mercadoLibreFetch<SearchResponse>(
+          `/users/${integration.userId}/items/search?status=active&limit=${searchLimit}&offset=${offset}`,
+          undefined,
+          db
+        );
 
       total = search.paging.total;
 
@@ -164,99 +186,171 @@ export async function syncMercadoLibreProducts() {
         break;
       }
 
-      activeMeliIds.push(...search.results);
+      activeMeliIds.push(
+        ...search.results
+      );
 
-      const idChunks = chunk(search.results, 20);
+      const idChunks = chunk(
+        search.results,
+        itemBulkLimit
+      );
 
       for (const ids of idChunks) {
-        const multiGet = await mercadoLibreFetch<MercadoLibreMultiGetResult[]>(
-          `/items?ids=${encodeURIComponent(ids.join(","))}`,
-          undefined,
-          db
-        );
+        const multiGet =
+          await mercadoLibreFetch<
+            MercadoLibreMultiGetResult[]
+          >(
+            `/items/bulk?ids=${encodeURIComponent(
+              ids.join(",")
+            )}`,
+            undefined,
+            db
+          );
 
         const operations = [];
 
         for (const result of multiGet) {
-          if (result.code !== 200 || !result.body) {
+          if (
+            result.status_code !== 200 ||
+            !result.body
+          ) {
             continue;
           }
 
           const item = result.body;
 
-          if (item.status !== "active") {
+          if (
+            item.status !== "active"
+          ) {
             continue;
           }
 
-          const categoryName = await getMercadoLibreCategoryName(
-            db,
-            item.category_id
-          );
+          const categoryName =
+            await getMercadoLibreCategoryName(
+              db,
+              item.category_id
+            );
 
           operations.push({
             updateOne: {
               filter: {
                 meliId: item.id,
               },
+
               update: {
                 $set: {
                   meliId: item.id,
                   title: item.title,
                   meliPrice: item.price,
-                  currencyId: item.currency_id,
-                  availableQuantity: item.available_quantity,
+                  currencyId:
+                    item.currency_id,
+                  availableQuantity:
+                    item.available_quantity,
 
                   thumbnail:
-                    item.pictures?.[0]?.secure_url ??
+                    item.pictures?.[0]
+                      ?.secure_url ??
                     item.thumbnail,
 
-                  permalink: item.permalink,
-                  status: item.status,
+                  permalink:
+                    item.permalink,
+
+                  status:
+                    item.status,
+
                   visible: true,
 
-                  categoryId: item.category_id,
+                  categoryId:
+                    item.category_id,
+
                   categoryName,
 
-                  updatedAt: new Date(),
+                  updatedAt:
+                    new Date(),
                 },
 
                 $setOnInsert: {
                   featured: false,
                 },
               },
+
               upsert: true,
             },
           });
         }
 
-        if (operations.length > 0) {
-          await productsCollection.bulkWrite(operations);
-          synced += operations.length;
+        if (
+          operations.length > 0
+        ) {
+          await productsCollection.bulkWrite(
+            operations
+          );
+
+          synced +=
+            operations.length;
         }
       }
 
-      offset += search.results.length;
+      offset +=
+        search.results.length;
     } while (offset < total);
 
-    const deactivateResult = await productsCollection.updateMany(
-      {
-        meliId: {
-          $nin: activeMeliIds,
+    const deactivateResult =
+      await productsCollection.updateMany(
+        {
+          meliId: {
+            $nin: activeMeliIds,
+          },
+
+          visible: true,
         },
-        visible: true,
-      },
-      {
-        $set: {
-          visible: false,
-          updatedAt: new Date(),
+
+        {
+          $set: {
+            visible: false,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+    const completedAt =
+      new Date();
+
+    await db
+      .collection("settings")
+      .updateOne(
+        {
+          key: "store",
         },
-      }
-    );
+
+        {
+          $set: {
+            lastSyncAt:
+              completedAt,
+
+            updatedAt:
+              completedAt,
+          },
+
+          $setOnInsert: {
+            key: "store",
+          },
+        },
+
+        {
+          upsert: true,
+        }
+      );
 
     return {
       total,
       synced,
-      deactivated: deactivateResult.modifiedCount,
+
+      deactivated:
+        deactivateResult.modifiedCount,
+
+      completedAt:
+        completedAt.toISOString(),
     };
   });
 }

@@ -4,18 +4,16 @@ import { mercadoLibreFetch } from "@/lib/mercadolibre";
 interface MercadoLibreCategory {
   id: string;
   name: string;
-  picture: string | null;
-  path_from_root: {
-    id: string;
-    name: string;
-  }[];
 }
 
-export async function getOrCreateCategory(categoryId: string) {
+export async function getOrCreateCategory(
+  categoryId: string
+) {
   return withDatabase(async (db) => {
-    const existing = await db.collection("categories").findOne({
-      meliId: categoryId,
-    });
+    const existing =
+      await db.collection("categories").findOne({
+        categoryId,
+      });
 
     if (existing) {
       return existing;
@@ -29,14 +27,15 @@ export async function getOrCreateCategory(categoryId: string) {
       );
 
     const document = {
-      meliId: category.id,
+      categoryId: category.id,
+      meliName: category.name,
       name: category.name,
-      picture: category.picture,
-      pathFromRoot: category.path_from_root,
       updatedAt: new Date(),
     };
 
-    await db.collection("categories").insertOne(document);
+    await db.collection("categories").insertOne(
+      document
+    );
 
     return document;
   });

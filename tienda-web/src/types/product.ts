@@ -9,6 +9,7 @@ export interface Product {
   status: string;
   visible: boolean;
   featured: boolean;
+  featuredOrder?: number;
   categoryId: string;
   updatedAt: Date;
 }

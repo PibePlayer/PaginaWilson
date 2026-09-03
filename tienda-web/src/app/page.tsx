@@ -14,11 +14,29 @@ export default async function Home() {
         visible: true,
         featured: true,
       })
-      .sort({
-        updatedAt: -1,
-      })
-      .limit(8)
       .toArray();
+
+    products.sort((a, b) => {
+      const orderA =
+        a.featuredOrder ??
+        Number.MAX_SAFE_INTEGER;
+
+      const orderB =
+        b.featuredOrder ??
+        Number.MAX_SAFE_INTEGER;
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      return (
+        b.updatedAt.getTime() -
+        a.updatedAt.getTime()
+      );
+    });
+
+    const featuredProducts =
+      products.slice(0, 8);
 
     return products.map((product) => ({
       meliId: product.meliId,

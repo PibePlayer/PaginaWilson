@@ -1,9 +1,18 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const phone = process.env.NEXT_PUBLIC_WHATSAPP_PHONE;
 
 export default function WhatsAppButton() {
-  if (!phone) {
+  const pathname = usePathname();
+
+  if (
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    !phone
+  ) {
     return null;
   }
 
@@ -17,26 +26,7 @@ export default function WhatsAppButton() {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Contactarnos por WhatsApp"
-      className="
-        fixed
-        bottom-5
-        right-5
-        z-50
-        flex
-        h-14
-        w-14
-        items-center
-        justify-center
-        rounded-full
-        bg-[#25D366]
-        text-white
-        shadow-lg
-        transition
-        duration-200
-        hover:scale-110
-        hover:shadow-xl
-        active:scale-95
-      "
+      className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg transition duration-200 hover:scale-110 hover:shadow-xl active:scale-95"
     >
       <svg
         viewBox="0 0 24 24"

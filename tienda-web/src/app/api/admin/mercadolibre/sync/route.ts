@@ -1,45 +1,56 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import { requireAdminApi } from "@/lib/require-admin-api";
 import { syncMercadoLibreProducts } from "@/lib/mercadolibre-sync";
 
-export async function POST(request: NextRequest) {
-  const syncSecret = process.env.ADMIN_SYNC_SECRET;
-  const authorization = request.headers.get("authorization");
+export async function POST(
+  request: NextRequest
+) {
+  const auth =
+    await requireAdminApi(request);
 
-  if (!syncSecret) {
-    console.error("ADMIN_SYNC_SECRET is not configured");
-
-    return NextResponse.json(
-      { success: false, error: "Synchronization is not configured" },
-      { status: 503 }
-    );
-  }
-
-  if (authorization !== `Bearer ${syncSecret}`) {
-    return NextResponse.json(
-      { success: false, error: "Unauthorized" },
-      { status: 401 }
-    );
+  if (!auth.authorized) {
+    return auth.response;
   }
 
   try {
-    const result = await syncMercadoLibreProducts();
+    const result =
+      await syncMercadoLibreProducts();
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
+    const response =
+      NextResponse.json({
+        success: true,
+        ...result,
+      });
+
+    await auth.refreshCookie(response);
+
+    return response;
   } catch (error) {
-    console.error("MercadoLibre sync error:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Synchronization failed",
-      },
-      { status: 500 }
+    console.error(
+      "MercadoLibre sync error:",
+      error
     );
+
+    const response =
+      NextResponse.json(
+        {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Synchronization failed",
+        },
+        {
+          status: 500,
+        }
+      );
+
+    await auth.refreshCookie(response);
+
+    return response;
   }
 }
