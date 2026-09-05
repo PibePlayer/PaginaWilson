@@ -25,7 +25,6 @@ interface MercadoLibrePicture {
 interface MercadoLibreItem {
   id: string;
   title: string;
-  price: number;
   currency_id: string;
   available_quantity: number;
   thumbnail: string;
@@ -50,6 +49,12 @@ interface MercadoLibreCategory {
   name: string;
 }
 
+interface MercadoLibreSalePrice {
+  amount: number;
+  regular_amount: number | null;
+  currency_id: string;
+}
+
 const categoryCache = new Map<string, string>();
 
 async function getMercadoLibreCategoryName(
@@ -65,7 +70,6 @@ async function getMercadoLibreCategoryName(
   const categoriesCollection =
     db.collection<Category>("categories");
 
-  // Primero buscamos nuestra categoría.
   const existingCategory =
     await categoriesCollection.findOne({
       categoryId,
@@ -80,7 +84,6 @@ async function getMercadoLibreCategoryName(
     return existingCategory.name;
   }
 
-  // Si no existe, la obtenemos desde MercadoLibre.
   const category =
     await mercadoLibreFetch<MercadoLibreCategory>(
       `/categories/${categoryId}`,
@@ -131,6 +134,19 @@ async function getMercadoLibreIntegration(
   }
 
   return integration;
+}
+
+async function getMercadoLibreSalePrice(
+  db: Db,
+  itemId: string
+): Promise<MercadoLibreSalePrice> {
+  return mercadoLibreFetch<MercadoLibreSalePrice>(
+    `/items/${encodeURIComponent(
+      itemId
+    )}/sale_price?context=channel_marketplace`,
+    undefined,
+    db
+  );
 }
 
 /**
@@ -225,11 +241,24 @@ export async function syncMercadoLibreProducts() {
             continue;
           }
 
+          const salePrice =
+            await getMercadoLibreSalePrice(
+              db,
+              item.id
+            );
+
           const categoryName =
             await getMercadoLibreCategoryName(
               db,
               item.category_id
             );
+
+          const regularPrice =
+            salePrice.regular_amount ??
+            salePrice.amount;
+
+          const discountedPrice =
+            salePrice.amount;
 
           operations.push({
             updateOne: {
@@ -241,9 +270,17 @@ export async function syncMercadoLibreProducts() {
                 $set: {
                   meliId: item.id,
                   title: item.title,
-                  meliPrice: item.price,
+
+                  meliPrice:
+                    regularPrice,
+
+                  meliDiscountedPrice:
+                    discountedPrice,
+
                   currencyId:
+                    salePrice.currency_id ??
                     item.currency_id,
+
                   availableQuantity:
                     item.available_quantity,
 

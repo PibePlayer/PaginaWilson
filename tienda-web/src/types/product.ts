@@ -2,6 +2,7 @@ export interface Product {
   meliId: string;
   title: string;
   meliPrice: number;
+  meliDiscountedPrice?: number;
   currencyId: string;
   availableQuantity: number;
   thumbnail: string;

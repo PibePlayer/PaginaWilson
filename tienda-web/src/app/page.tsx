@@ -38,25 +38,35 @@ export default async function Home() {
     const featuredProducts =
       products.slice(0, 8);
 
-    return products.map((product) => ({
-      meliId: product.meliId,
-      title: product.title,
-      meliPrice: product.meliPrice,
-      currencyId: product.currencyId,
-      availableQuantity: product.availableQuantity,
-      thumbnail: product.thumbnail,
-      permalink: product.permalink,
-      status: product.status,
-      visible: product.visible,
-      featured: product.featured,
-      categoryId: product.categoryId,
-      updatedAt: product.updatedAt.toISOString(),
-      webPrice: calculateWebPrice(
-        product.meliPrice,
-        discountPercent
-      ),
-      discountPercent,
-    }));
+    return products.map((product) => {
+      const currentMeliPrice =
+        product.meliDiscountedPrice ??
+        product.meliPrice;
+
+      return {
+        meliId: product.meliId,
+        title: product.title,
+        meliPrice: product.meliPrice,
+        meliDiscountedPrice:
+          product.meliDiscountedPrice,
+        currencyId: product.currencyId,
+        availableQuantity:
+          product.availableQuantity,
+        thumbnail: product.thumbnail,
+        permalink: product.permalink,
+        status: product.status,
+        visible: product.visible,
+        featured: product.featured,
+        categoryId: product.categoryId,
+        updatedAt:
+          product.updatedAt.toISOString(),
+        webPrice: calculateWebPrice(
+          currentMeliPrice,
+          discountPercent
+        ),
+        discountPercent,
+      };
+    });
   });
 
   return (

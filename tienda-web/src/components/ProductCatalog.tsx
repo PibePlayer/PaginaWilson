@@ -13,6 +13,7 @@ interface Product {
   meliId: string;
   title: string;
   meliPrice: number;
+  meliDiscountedPrice?: number;
   currencyId: string;
   availableQuantity: number;
   thumbnail: string;
@@ -275,6 +276,28 @@ export default function ProductCatalog({
     setFiltersOpen(false);
   }
 
+  async function handleClearPriceFilters() {
+    const filters: AppliedFilters = {
+      categoryId: selectedCategory,
+      search: appliedFilters.search,
+      minPrice: "",
+      maxPrice: "",
+    };
+
+    setMinPriceInput("");
+    setMaxPriceInput("");
+    setAppliedFilters(filters);
+    updateUrl(filters);
+
+    await loadProducts(
+      1,
+      filters,
+      false
+    );
+
+    setFiltersOpen(false);
+  }
+
   async function handleCategoryChange(
     categoryId: string
   ) {
@@ -389,6 +412,7 @@ export default function ProductCatalog({
         ref={filtersRef}
         className="relative mb-8"
       >
+        <div className="flex items-center">
           <button
             type="button"
             onClick={() =>
@@ -400,46 +424,92 @@ export default function ProductCatalog({
                 : "border-zinc-300"
             }`}
           >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className="h-4 w-4"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 5h18M6 12h12m-9 7h6"
-            />
-          </svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="h-4 w-4"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 5h18M6 12h12m-9 7h6"
+              />
+            </svg>
 
-          Filtros
+            Filtros
 
-          {activePriceFilters > 0 && (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-950 px-1.5 text-[11px] text-white">
-              {activePriceFilters}
-            </span>
-          )}
+            {activePriceFilters > 0 && (
+              <>
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-950 px-1.5 text-[11px] text-white">
+                  {activePriceFilters}
+                </span>
 
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            className={`h-4 w-4 transition-transform duration-200 ease-out ${
-              filtersOpen ? "rotate-180" : "rotate-0"
-            }`}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m6 9 6 6 6-6"
-            />
-          </svg>
-        </button>
+                <span
+                  role="button"
+                  tabIndex={loading ? -1 : 0}
+                  aria-label="Limpiar filtros de precio"
+                  title="Limpiar filtros"
+                  onClick={(event) => {
+                    event.stopPropagation();
+
+                    if (!loading) {
+                      void handleClearPriceFilters();
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      (event.key === "Enter" ||
+                        event.key === " ") &&
+                      !loading
+                    ) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void handleClearPriceFilters();
+                    }
+                  }}
+                  className="ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-zinc-400 transition hover:bg-red-50 hover:text-red-600"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                    stroke="currentColor"
+                    className="h-4 w-4"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 6l12 12M18 6 6 18"
+                    />
+                  </svg>
+                </span>
+              </>
+            )}
+
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className={`h-4 w-4 transition-transform duration-200 ease-out ${
+                filtersOpen
+                  ? "rotate-180"
+                  : "rotate-0"
+              }`}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m6 9 6 6 6-6"
+              />
+            </svg>
+          </button>
+        </div>
 
         <div
           className={`absolute left-0 top-full z-30 mt-2 w-[min(92vw,420px)] origin-top-left rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl transition-all duration-200 ease-out ${
@@ -448,6 +518,7 @@ export default function ProductCatalog({
               : "pointer-events-none -translate-y-2 scale-95 opacity-0"
           }`}
         >
+          {/* Cabecera del filtro */}
           <div className="mb-3">
             <p className="font-proxima text-sm font-bold text-zinc-900">
               Filtrar por precio

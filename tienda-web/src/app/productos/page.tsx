@@ -21,129 +21,236 @@ export default async function ProductsPage({
 }: ProductsPageProps) {
   const params = await searchParams;
 
-  const search = params.search?.trim() || "";
-  const categoryId = params.categoryId || "all";
-  const minPrice = params.minPrice || "";
-  const maxPrice = params.maxPrice || "";
+  const search =
+    params.search?.trim() || "";
 
-  const { formattedProducts, formattedCategories, total } =
-    await withDatabase(async (db) => {
-      const discountPercent =
-        await getMeliDiscountPercent(db);
+  const categoryId =
+    params.categoryId || "all";
 
-      const productsCollection =
-        db.collection<Product>("products");
+  const minPrice =
+    params.minPrice || "";
 
-      const filter: Record<string, unknown> = {
-        visible: true,
+  const maxPrice =
+    params.maxPrice || "";
+
+  const {
+    formattedProducts,
+    formattedCategories,
+    total,
+  } = await withDatabase(async (db) => {
+    const discountPercent =
+      await getMeliDiscountPercent(db);
+
+    const productsCollection =
+      db.collection<Product>("products");
+
+    const filter: Record<string, unknown> = {
+      visible: true,
+    };
+
+    if (search) {
+      filter.title = {
+        $regex: search,
+        $options: "i",
       };
+    }
 
-      if (search) {
-        filter.title = {
-          $regex: search,
-          $options: "i",
-        };
+    if (categoryId !== "all") {
+      filter.categoryId = categoryId;
+    }
+
+    /*
+     * El filtro que ingresa el usuario corresponde
+     * al precio FINAL de SOGUE.
+     *
+     * Ejemplo:
+     *
+     * Precio ML efectivo: $800.000
+     * Descuento SOGUE: 10%
+     * Precio SOGUE: $720.000
+     *
+     * Si el usuario busca $700.000 - $750.000,
+     * debemos encontrar productos cuyo precio ML
+     * efectivo esté aproximadamente entre:
+     *
+     * $700.000 / 0,90 = $777.777
+     * $750.000 / 0,90 = $833.333
+     *
+     * Por eso convertimos el rango antes de
+     * consultar MongoDB.
+     */
+
+    const minPriceNumber =
+      Number(minPrice);
+
+    const maxPriceNumber =
+      Number(maxPrice);
+
+    const hasMinPrice =
+      minPrice !== "" &&
+      Number.isFinite(minPriceNumber);
+
+    const hasMaxPrice =
+      maxPrice !== "" &&
+      Number.isFinite(maxPriceNumber);
+
+    const discountFactor =
+      1 - discountPercent / 100;
+
+    if (
+      (hasMinPrice || hasMaxPrice) &&
+      discountFactor > 0
+    ) {
+      const meliPriceFilter: Record<
+        string,
+        number
+      > = {};
+
+      if (hasMinPrice) {
+        meliPriceFilter.$gte =
+          minPriceNumber /
+          discountFactor;
       }
 
-      if (categoryId !== "all") {
-        filter.categoryId = categoryId;
+      if (hasMaxPrice) {
+        meliPriceFilter.$lte =
+          maxPriceNumber /
+          discountFactor;
       }
 
-      const discountFactor =
-        1 - discountPercent / 100;
+      /*
+       * Preferimos meliDiscountedPrice,
+       * porque representa el precio efectivo
+       * actual de MercadoLibre.
+       *
+       * Para productos antiguos que todavía
+       * no tengan ese campo, utilizamos meliPrice
+       * como fallback.
+       */
+      filter.$or = [
+        {
+          meliDiscountedPrice:
+            meliPriceFilter,
+        },
+        {
+          meliDiscountedPrice: {
+            $exists: false,
+          },
+          meliPrice:
+            meliPriceFilter,
+        },
+      ];
+    }
 
-      if (discountFactor > 0) {
-        const priceFilter: Record<string, number> = {};
+    const [
+      products,
+      total,
+      categories,
+    ] = await Promise.all([
+      productsCollection
+        .find(filter)
+        .sort({
+          title: 1,
+        })
+        .limit(PAGE_SIZE)
+        .toArray(),
 
-        const minPriceNumber = Number(minPrice);
-        const maxPriceNumber = Number(maxPrice);
+      productsCollection.countDocuments(
+        filter
+      ),
 
-        if (
-          minPrice &&
-          Number.isFinite(minPriceNumber)
-        ) {
-          priceFilter.$gte =
-            minPriceNumber / discountFactor;
-        }
+      db
+        .collection<Category>("categories")
+        .find({})
+        .sort({
+          name: 1,
+        })
+        .toArray(),
+    ]);
 
-        if (
-          maxPrice &&
-          Number.isFinite(maxPriceNumber)
-        ) {
-          priceFilter.$lte =
-            maxPriceNumber / discountFactor;
-        }
+    return {
+      formattedProducts:
+        products.map((product) => {
+          const currentMeliPrice =
+            product.meliDiscountedPrice ??
+            product.meliPrice;
 
-        if (Object.keys(priceFilter).length > 0) {
-          filter.meliPrice = priceFilter;
-        }
-      }
+          return {
+            meliId: product.meliId,
+            title: product.title,
 
-      const [products, total, categories] =
-        await Promise.all([
-          productsCollection
-            .find(filter)
-            .sort({
-              title: 1,
-            })
-            .limit(PAGE_SIZE)
-            .toArray(),
+            meliPrice:
+              product.meliPrice,
 
-          productsCollection.countDocuments(filter),
+            meliDiscountedPrice:
+              product.meliDiscountedPrice,
 
-          db
-            .collection<Category>("categories")
-            .find({})
-            .sort({
-              name: 1,
-            })
-            .toArray(),
-        ]);
+            currencyId:
+              product.currencyId,
 
-      return {
-        formattedProducts: products.map((product) => ({
-          meliId: product.meliId,
-          title: product.title,
-          meliPrice: product.meliPrice,
-          currencyId: product.currencyId,
-          availableQuantity:
-            product.availableQuantity,
-          thumbnail: product.thumbnail,
-          permalink: product.permalink,
-          status: product.status,
-          visible: product.visible,
-          featured: product.featured,
-          categoryId: product.categoryId,
-          updatedAt:
-            product.updatedAt.toISOString(),
-          webPrice: calculateWebPrice(
-            product.meliPrice,
-            discountPercent
-          ),
-          discountPercent,
+            availableQuantity:
+              product.availableQuantity,
+
+            thumbnail:
+              product.thumbnail,
+
+            permalink:
+              product.permalink,
+
+            status:
+              product.status,
+
+            visible:
+              product.visible,
+
+            featured:
+              product.featured,
+
+            categoryId:
+              product.categoryId,
+
+            updatedAt:
+              product.updatedAt.toISOString(),
+
+            webPrice:
+              calculateWebPrice(
+                currentMeliPrice,
+                discountPercent
+              ),
+
+            discountPercent,
+          };
+        }),
+
+      formattedCategories:
+        categories.map((category) => ({
+          categoryId:
+            category.categoryId,
+
+          name:
+            category.name,
         })),
 
-        formattedCategories: categories.map(
-          (category) => ({
-            categoryId: category.categoryId,
-            name: category.name,
-          })
-        ),
-
-        total,
-      };
-    });
+      total,
+    };
+  });
 
   return (
     <main className="min-h-screen bg-zinc-100 pt-24">
       <section className="mx-auto max-w-7xl px-6 pb-24">
         <ProductCatalog
           key={`${search}|${categoryId}|${minPrice}|${maxPrice}`}
-          initialProducts={formattedProducts}
-          categories={formattedCategories}
+          initialProducts={
+            formattedProducts
+          }
+          categories={
+            formattedCategories
+          }
           initialTotal={total}
           initialSearch={search}
-          initialCategoryId={categoryId}
+          initialCategoryId={
+            categoryId
+          }
           initialMinPrice={minPrice}
           initialMaxPrice={maxPrice}
         />
