@@ -34,6 +34,7 @@ const uses = [
 export default function NosotrosPage() {
   return (
     <main className="min-h-screen bg-zinc-100 text-zinc-950">
+
       {/* Hero */}
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-32">
         <div className="max-w-3xl">
@@ -154,6 +155,47 @@ export default function NosotrosPage() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* MercadoLibre */}
+      <section className="mx-auto max-w-7xl px-6 pb-20">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-7 shadow-sm md:p-9">
+          <div className="max-w-3xl">
+            <p className="font-proxima text-sm font-bold uppercase tracking-wider text-emerald-600">
+              También nos encontrás online
+            </p>
+
+            <h2 className="mt-2 font-proxima text-3xl font-bold tracking-tight text-zinc-950">
+              SOGUENOTE en MercadoLibre
+            </h2>
+
+            <p className="mt-4 font-proxima text-base leading-7 text-zinc-600">
+              Además de nuestra tienda online, podés encontrarnos en
+              MercadoLibre como{" "}
+              <strong className="font-bold text-zinc-950">
+                SOGUENOTE
+              </strong>
+              . Allí también publicamos nuestros productos y
+              recibimos consultas.
+            </p>
+
+            <a
+              href="https://listado.mercadolibre.com.ar/_CustId_141336342"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#FFE600] px-5 py-3 font-proxima text-sm font-bold text-[#333333] transition hover:bg-[#F5D900] active:scale-[0.98]"
+            >
+              <img
+                src="/mercadolibre.svg"
+                alt=""
+                aria-hidden="true"
+                className="h-5 w-5"
+              />
+
+              Ver SOGUENOTE en MercadoLibre
+            </a>
           </div>
         </div>
       </section>

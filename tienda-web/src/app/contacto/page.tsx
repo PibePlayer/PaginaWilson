@@ -29,7 +29,12 @@ export default function ContactoPage() {
 
           <p className="mt-4 font-proxima text-base leading-7 text-zinc-600">
             Podés contactarnos directamente por WhatsApp o
-            acercarte a nuestro local.
+            acercarte a nuestro local. También podés encontrarnos
+            en MercadoLibre como{" "}
+            <strong className="font-bold text-zinc-900">
+              SOGUENOTE
+            </strong>
+            .
           </p>
         </div>
 
@@ -72,12 +77,13 @@ export default function ContactoPage() {
                     aria-hidden="true"
                     className="h-5 w-5"
                   />
+
                   Escribir por WhatsApp
                 </a>
               )}
             </section>
 
-            {/* Ubicación */}
+            {/* Ubicación y horario */}
             <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100">
                 <svg
@@ -91,7 +97,7 @@ export default function ContactoPage() {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+                    d="M15 10.5a3 3 0 1 1-6 0Z"
                   />
 
                   <path
@@ -135,6 +141,99 @@ export default function ContactoPage() {
                 className="mt-5 block text-center font-proxima text-sm font-bold text-zinc-700 underline decoration-zinc-300 underline-offset-4 transition hover:text-zinc-950"
               >
                 Abrir en Google Maps
+              </a>
+
+              <div className="mt-6 border-t border-zinc-200 pt-6">
+                <div className="flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.8}
+                    stroke="currentColor"
+                    className="h-5 w-5 text-zinc-700"
+                  >
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="9"
+                    />
+
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 7v5l3 2"
+                    />
+                  </svg>
+
+                  <h3 className="font-proxima text-base font-bold text-zinc-950">
+                    Horario de atención
+                  </h3>
+                </div>
+
+                <div className="mt-3 space-y-1.5 font-proxima text-sm leading-6 text-zinc-600">
+                  <p>
+                    <strong className="font-bold text-zinc-800">
+                      Lunes a viernes:
+                    </strong>{" "}
+                    10:00 a 19:00 hs
+                  </p>
+
+                  <p>
+                    <strong className="font-bold text-zinc-800">
+                      Sábados:
+                    </strong>{" "}
+                    10:00 a 15:00 hs
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* MercadoLibre */}
+            <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FFE600]">
+                  <img
+                    src="/mercadolibre.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className="h-7 w-7"
+                  />
+                </div>
+
+                <div>
+                  <h2 className="font-proxima text-xl font-bold text-zinc-950">
+                    SOGUENOTE en MercadoLibre
+                  </h2>
+
+                  <p className="mt-1 font-proxima text-sm text-zinc-600">
+                    También podés encontrarnos en MercadoLibre.
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 font-proxima text-sm leading-6 text-zinc-600">
+                Buscanos como{" "}
+                <strong className="font-bold text-zinc-950">
+                  SOGUENOTE
+                </strong>{" "}
+                y encontrá nuestras publicaciones y productos.
+              </p>
+
+              <a
+                href="https://listado.mercadolibre.com.ar/_CustId_141336342"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-[#FFE600] px-5 py-3.5 font-proxima text-sm font-bold text-[#333333] transition hover:bg-[#F5D900] active:scale-[0.98]"
+              >
+                <img
+                  src="/mercadolibre.svg"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                />
+
+                Ver SOGUENOTE en MercadoLibre
               </a>
             </section>
           </div>
