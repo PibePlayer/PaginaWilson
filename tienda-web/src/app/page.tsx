@@ -1,73 +1,121 @@
 import ProductCard from "@/components/ProductCard";
+
 import { withDatabase } from "@/lib/db";
 import { getMeliDiscountPercent } from "@/lib/settings";
 import { calculateWebPrice } from "@/lib/pricing";
+
 import type { Product } from "@/types/product";
 
 export default async function Home() {
-  const featuredProducts = await withDatabase(async (db) => {
-    const discountPercent = await getMeliDiscountPercent(db);
+  const featuredProducts =
+    await withDatabase(async (db) => {
+      const discountPercent =
+        await getMeliDiscountPercent(db);
 
-    const products = await db
-      .collection<Product>("products")
-      .find({
-        visible: true,
-        featured: true,
-      })
-      .toArray();
+      const products =
+        await db
+          .collection<Product>("products")
+          .find({
+            visible: true,
+            featured: true,
+          })
+          .toArray();
 
-    products.sort((a, b) => {
-      const orderA =
-        a.featuredOrder ??
-        Number.MAX_SAFE_INTEGER;
+      products.sort((a, b) => {
+        const orderA =
+          a.featuredOrder ??
+          Number.MAX_SAFE_INTEGER;
 
-      const orderB =
-        b.featuredOrder ??
-        Number.MAX_SAFE_INTEGER;
+        const orderB =
+          b.featuredOrder ??
+          Number.MAX_SAFE_INTEGER;
 
-      if (orderA !== orderB) {
-        return orderA - orderB;
-      }
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
 
-      return (
-        b.updatedAt.getTime() -
-        a.updatedAt.getTime()
-      );
+        return (
+          b.updatedAt.getTime() -
+          a.updatedAt.getTime()
+        );
+      });
+
+      const featuredProducts =
+        products.slice(0, 8);
+
+      return products.map((product) => {
+        /*
+         * Precio efectivo actual de ML.
+         */
+        const currentMeliPrice =
+          product.meliDiscountedPrice ??
+          product.meliPrice;
+
+        /*
+         * El descuento individual tiene
+         * prioridad sobre el global.
+         */
+        const effectiveDiscountPercent =
+          product.discountPercent ??
+          discountPercent;
+
+        return {
+          meliId:
+            product.meliId,
+
+          title:
+            product.title,
+
+          meliPrice:
+            product.meliPrice,
+
+          meliDiscountedPrice:
+            product.meliDiscountedPrice,
+
+          currencyId:
+            product.currencyId,
+
+          availableQuantity:
+            product.availableQuantity,
+
+          thumbnail:
+            product.thumbnail,
+
+          permalink:
+            product.permalink,
+
+          status:
+            product.status,
+
+          visible:
+            product.visible,
+
+          featured:
+            product.featured,
+
+          categoryId:
+            product.categoryId,
+
+          updatedAt:
+            product.updatedAt.toISOString(),
+
+          /*
+           * Precio final SOGUE.
+           */
+          webPrice:
+            calculateWebPrice(
+              currentMeliPrice,
+              effectiveDiscountPercent
+            ),
+
+          /*
+           * Descuento realmente aplicado.
+           */
+          discountPercent:
+            effectiveDiscountPercent,
+        };
+      });
     });
-
-    const featuredProducts =
-      products.slice(0, 8);
-
-    return products.map((product) => {
-      const currentMeliPrice =
-        product.meliDiscountedPrice ??
-        product.meliPrice;
-
-      return {
-        meliId: product.meliId,
-        title: product.title,
-        meliPrice: product.meliPrice,
-        meliDiscountedPrice:
-          product.meliDiscountedPrice,
-        currencyId: product.currencyId,
-        availableQuantity:
-          product.availableQuantity,
-        thumbnail: product.thumbnail,
-        permalink: product.permalink,
-        status: product.status,
-        visible: product.visible,
-        featured: product.featured,
-        categoryId: product.categoryId,
-        updatedAt:
-          product.updatedAt.toISOString(),
-        webPrice: calculateWebPrice(
-          currentMeliPrice,
-          discountPercent
-        ),
-        discountPercent,
-      };
-    });
-  });
 
   return (
     <main className="min-h-screen bg-zinc-100 text-zinc-950">
@@ -111,12 +159,14 @@ export default async function Home() {
 
         {featuredProducts.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {featuredProducts.map((product) => (
-              <ProductCard
-                key={product.meliId}
-                product={product}
-              />
-            ))}
+            {featuredProducts.map(
+              (product) => (
+                <ProductCard
+                  key={product.meliId}
+                  product={product}
+                />
+              )
+            )}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center">

@@ -62,77 +62,57 @@ export async function GET(
         };
       }
 
-      const discountPercent =
+      /*
+       * Descuento global de la tienda.
+       *
+       * Se utiliza solamente cuando el producto
+       * no tiene un descuento individual.
+       */
+      const globalDiscountPercent =
         await getMeliDiscountPercent(db);
 
       /*
-       * Los filtros representan el
-       * precio final de SOGUE.
+       * El filtro de precio representa el
+       * precio FINAL de SOGUE.
        *
-       * Precio SOGUE =
-       * precio efectivo ML *
-       * (1 - descuento SOGUE / 100)
+       * Como cada producto puede tener un
+       * descuento diferente, no podemos convertir
+       * minPrice/maxPrice usando solamente el
+       * descuento global.
        *
-       * Por lo tanto, convertimos el
-       * rango solicitado al rango
-       * equivalente del precio efectivo
-       * de MercadoLibre.
+       * En su lugar, calculamos el precio final
+       * dentro de MongoDB:
+       *
+       * precio ML efectivo *
+       * (1 - descuento / 100)
+       *
+       * donde:
+       *
+       * descuento =
+       *   descuento individual del producto
+       *   o descuento global si no existe.
        */
+      const hasMinPrice =
+        minPrice !== null &&
+        Number.isFinite(minPrice);
 
-      const discountFactor =
-        1 - discountPercent / 100;
+      const hasMaxPrice =
+        maxPrice !== null &&
+        Number.isFinite(maxPrice);
 
-      if (discountFactor > 0) {
-        const priceFilter: Record<
-          string,
-          number
-        > = {};
+      const priceFilterStages: Record<
+        string,
+        unknown
+      > = {};
 
-        if (
-          minPrice !== null &&
-          Number.isFinite(minPrice)
-        ) {
-          priceFilter.$gte =
-            minPrice /
-            discountFactor;
-        }
+      if (hasMinPrice) {
+        priceFilterStages.$gte =
+          minPrice;
+      }
 
-        if (
-          maxPrice !== null &&
-          Number.isFinite(maxPrice)
-        ) {
-          priceFilter.$lte =
-            maxPrice /
-            discountFactor;
-        }
-
-        if (
-          Object.keys(priceFilter).length > 0
-        ) {
-          /*
-           * Productos nuevos:
-           * usamos el precio efectivo
-           * actual de MercadoLibre.
-           *
-           * Productos antiguos:
-           * si todavía no tienen
-           * meliDiscountedPrice,
-           * usamos meliPrice.
-           */
-          filter.$or = [
-            {
-              meliDiscountedPrice:
-                priceFilter,
-            },
-            {
-              meliDiscountedPrice: {
-                $exists: false,
-              },
-              meliPrice:
-                priceFilter,
-            },
-          ];
-        }
+      if (hasMaxPrice) {
+        priceFilterStages.$lte =
+          maxPrice;
       }
 
       const productsCollection =
@@ -140,21 +120,125 @@ export async function GET(
           "products"
         );
 
-      const [products, total] =
-        await Promise.all([
-          productsCollection
-            .find(filter)
-            .sort({
-              title: 1,
-            })
-            .skip(skip)
-            .limit(PAGE_SIZE)
-            .toArray(),
+      /*
+       * Construimos una pipeline para poder
+       * calcular el precio SOGUE individual
+       * antes de aplicar el filtro y la
+       * paginación.
+       */
+      const pipeline: Record<
+        string,
+        unknown
+      >[] = [
+        {
+          $match: filter,
+        },
 
-          productsCollection.countDocuments(
-            filter
-          ),
-        ]);
+        {
+          $addFields: {
+            effectiveMeliPrice: {
+              $ifNull: [
+                "$meliDiscountedPrice",
+                "$meliPrice",
+              ],
+            },
+
+            effectiveDiscountPercent: {
+              $ifNull: [
+                "$discountPercent",
+                globalDiscountPercent,
+              ],
+            },
+          },
+        },
+
+        {
+          $addFields: {
+            webPrice: {
+              $round: [
+                {
+                  $multiply: [
+                    "$effectiveMeliPrice",
+                    {
+                      $subtract: [
+                        1,
+                        {
+                          $divide: [
+                            "$effectiveDiscountPercent",
+                            100,
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                0,
+              ],
+            },
+          },
+        },
+      ];
+
+      /*
+       * Aplicamos el filtro sobre el precio
+       * final de SOGUE.
+       */
+      if (
+        Object.keys(priceFilterStages)
+          .length > 0
+      ) {
+        pipeline.push({
+          $match: {
+            webPrice:
+              priceFilterStages,
+          },
+        });
+      }
+
+      /*
+       * Orden, paginación y conteo.
+       */
+      const dataPipeline = [
+        ...pipeline,
+        {
+          $sort: {
+            title: 1,
+          },
+        },
+        {
+          $skip: skip,
+        },
+        {
+          $limit: PAGE_SIZE,
+        },
+      ];
+
+      const countPipeline = [
+        ...pipeline,
+        {
+          $count: "total",
+        },
+      ];
+
+      const [
+        products,
+        countResult,
+      ] = await Promise.all([
+        productsCollection
+          .aggregate<Product>(
+            dataPipeline
+          )
+          .toArray(),
+
+        productsCollection
+          .aggregate<{
+            total: number;
+          }>(countPipeline)
+          .toArray(),
+      ]);
+
+      const total =
+        countResult[0]?.total ?? 0;
 
       const formattedProducts =
         products.map((product) => {
@@ -170,6 +254,14 @@ export async function GET(
           const effectiveMeliPrice =
             product.meliDiscountedPrice ??
             product.meliPrice;
+
+          /*
+           * El descuento individual tiene
+           * prioridad sobre el global.
+           */
+          const effectiveDiscountPercent =
+            product.discountPercent ??
+            globalDiscountPercent;
 
           return {
             meliId:
@@ -221,20 +313,19 @@ export async function GET(
 
             /*
              * Precio final SOGUE.
-             *
-             * Ejemplo:
-             *
-             * ML efectivo: $800.000
-             * SOGUE: 10%
-             * Web: $720.000
              */
             webPrice:
               calculateWebPrice(
                 effectiveMeliPrice,
-                discountPercent
+                effectiveDiscountPercent
               ),
 
-            discountPercent,
+            /*
+             * Descuento que realmente
+             * se está aplicando.
+             */
+            discountPercent:
+              effectiveDiscountPercent,
           };
         });
 

@@ -8,6 +8,11 @@ import {
   useState,
 } from "react";
 
+interface ProductDiscountChange {
+  meliId: string;
+  discountPercent: number | null;
+}
+
 interface CategoryChange {
   categoryId: string;
   name: string;
@@ -23,6 +28,7 @@ interface AdminChanges {
   categories: CategoryChange[];
   featured: FeaturedChange[];
   featuredOrder?: string[];
+  productDiscounts: ProductDiscountChange[];
 }
 
 interface AdminChangesContextValue {
@@ -33,6 +39,12 @@ interface AdminChangesContextValue {
 
   setDiscountChange: (
     value: number | undefined
+  ) => void;
+
+  setProductDiscountChange: (
+    meliId: string,
+    discountPercent: number | undefined,
+    originalDiscountPercent: number | undefined
   ) => void;
 
   setCategoryChange: (
@@ -69,6 +81,7 @@ export function AdminChangesProvider({
     useState<AdminChanges>({
       categories: [],
       featured: [],
+      productDiscounts: [],
     });
 
   const [revision, setRevision] =
@@ -81,6 +94,36 @@ export function AdminChangesProvider({
       ...current,
       discountPercent: value,
     }));
+  }
+
+  function setProductDiscountChange(
+    meliId: string,
+    discountPercent: number | undefined,
+    originalDiscountPercent: number | undefined
+  ) {
+    setChanges((current) => {
+      const productDiscounts =
+        current.productDiscounts.filter(
+          (item) =>
+            item.meliId !== meliId
+        );
+
+      if (
+        discountPercent !==
+        originalDiscountPercent
+      ) {
+        productDiscounts.push({
+          meliId,
+          discountPercent:
+            discountPercent ?? null,
+        });
+      }
+
+      return {
+        ...current,
+        productDiscounts,
+      };
+    });
   }
 
   function setCategoryChange(
@@ -166,6 +209,7 @@ export function AdminChangesProvider({
     setChanges({
       categories: [],
       featured: [],
+      productDiscounts: [],
     });
 
     setRevision(
@@ -183,7 +227,8 @@ export function AdminChangesProvider({
       changes.featured.length +
       (changes.featuredOrder
         ? 1
-        : 0);
+        : 0) +
+      changes.productDiscounts.length;
 
     return {
       changes,
@@ -193,6 +238,7 @@ export function AdminChangesProvider({
       revision,
 
       setDiscountChange,
+      setProductDiscountChange,
       setCategoryChange,
       setFeaturedChange,
       setFeaturedOrderChange,

@@ -11,24 +11,30 @@ import {
   useAdminChanges,
 } from "@/components/admin/AdminChangesContext";
 
+import { calculateWebPrice } from "@/lib/pricing";
+
 interface Product {
   meliId: string;
   title: string;
   meliPrice: number;
+  meliDiscountedPrice?: number;
   currencyId: string;
   availableQuantity: number;
   thumbnail: string;
   featured: boolean;
   featuredOrder?: number;
+  discountPercent?: number;
 }
 
 type Filter =
   | "all"
   | "featured"
-  | "not-featured";
+  | "not-featured"
+  | "custom-discount";
 
 export default function AdminFeatured() {
   const {
+    setProductDiscountChange,
     setFeaturedChange,
     setFeaturedOrderChange,
     revision,
@@ -51,6 +57,9 @@ export default function AdminFeatured() {
     originalFeaturedOrder,
     setOriginalFeaturedOrder,
   ] = useState<string[]>([]);
+
+  const [globalDiscountPercent, setGlobalDiscountPercent] =
+    useState(0);
 
   const [loading, setLoading] =
     useState(true);
@@ -93,39 +102,39 @@ export default function AdminFeatured() {
         }
 
         const loaded =
-          data.products || [];
+          (data.products || []) as Product[];
+
+        setGlobalDiscountPercent(
+          Number.isFinite(
+            data.globalDiscountPercent
+          )
+            ? data.globalDiscountPercent
+            : 0
+        );
 
         const loadedFeaturedOrder =
           loaded
             .filter(
-              (product: Product) =>
+              (product) =>
                 product.featured
             )
             .sort(
-              (
-                a: Product,
-                b: Product
-              ) =>
+              (a, b) =>
                 (a.featuredOrder ??
                   Number.MAX_SAFE_INTEGER) -
                 (b.featuredOrder ??
                   Number.MAX_SAFE_INTEGER)
             )
             .map(
-              (product: Product) =>
+              (product) =>
                 product.meliId
             );
 
         setProducts(loaded);
-
-        setOriginalProducts(
-          loaded
-        );
-
+        setOriginalProducts(loaded);
         setFeaturedOrder(
           loadedFeaturedOrder
         );
-
         setOriginalFeaturedOrder(
           loadedFeaturedOrder
         );
@@ -144,7 +153,7 @@ export default function AdminFeatured() {
   }, []);
 
   /*
-   * Después de Apply global, el estado actual
+   * Después de Apply, el estado actual
    * pasa a ser el nuevo estado original.
    */
   useEffect(() => {
@@ -169,10 +178,6 @@ export default function AdminFeatured() {
       [...featuredOrder];
 
     if (newValue) {
-      /*
-       * Al activar un producto,
-       * se agrega al final de destacados.
-       */
       if (
         !newOrder.includes(
           product.meliId
@@ -183,10 +188,6 @@ export default function AdminFeatured() {
         );
       }
     } else {
-      /*
-       * Al desactivar, se elimina
-       * del orden de destacados.
-       */
       newOrder =
         newOrder.filter(
           (meliId) =>
@@ -230,6 +231,84 @@ export default function AdminFeatured() {
     setFeaturedOrderChange(
       newOrder,
       originalFeaturedOrder
+    );
+  }
+
+  function updateDiscount(
+    product: Product,
+    value: string
+  ) {
+    /*
+     * Campo vacío = quitar descuento particular
+     * y volver a utilizar el global.
+     */
+    if (value.trim() === "") {
+      setProducts((current) =>
+        current.map((item) =>
+          item.meliId ===
+          product.meliId
+            ? {
+                ...item,
+                discountPercent:
+                  undefined,
+              }
+            : item
+        )
+      );
+
+      const original =
+        originalProducts.find(
+          (item) =>
+            item.meliId ===
+            product.meliId
+        );
+
+      setProductDiscountChange(
+        product.meliId,
+        undefined,
+        original?.discountPercent
+      );
+
+      return;
+    }
+
+    const parsed =
+      Number(value);
+
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+
+    const safeValue =
+      Math.min(
+        100,
+        Math.max(0, parsed)
+      );
+
+    setProducts((current) =>
+      current.map((item) =>
+        item.meliId ===
+        product.meliId
+          ? {
+              ...item,
+              discountPercent:
+                safeValue,
+            }
+          : item
+      )
+    );
+
+    const original =
+      originalProducts.find(
+        (item) =>
+          item.meliId ===
+          product.meliId
+      );
+
+    setProductDiscountChange(
+      product.meliId,
+      safeValue,
+      original?.discountPercent
     );
   }
 
@@ -329,6 +408,26 @@ export default function AdminFeatured() {
     setDraggingId(null);
   }
 
+  function isDiscountModified(
+    product: Product
+  ) {
+    const original =
+      originalProducts.find(
+        (item) =>
+          item.meliId ===
+          product.meliId
+      );
+
+    if (!original) {
+      return false;
+    }
+
+    return (
+      product.discountPercent !==
+      original.discountPercent
+    );
+  }
+
   function isModified(
     product: Product
   ) {
@@ -343,9 +442,6 @@ export default function AdminFeatured() {
       return false;
     }
 
-    /*
-     * Cambio de estado destacado.
-     */
     if (
       product.featured !==
       original.featured
@@ -353,10 +449,13 @@ export default function AdminFeatured() {
       return true;
     }
 
-    /*
-     * Los no destacados no tienen
-     * un orden que comparar.
-     */
+    if (
+      product.discountPercent !==
+      original.discountPercent
+    ) {
+      return true;
+    }
+
     if (!product.featured) {
       return false;
     }
@@ -392,19 +491,46 @@ export default function AdminFeatured() {
     ).format(price);
   }
 
+  function getCurrentMeliPrice(
+    product: Product
+  ) {
+    return (
+      product.meliDiscountedPrice ??
+      product.meliPrice
+    );
+  }
+
+  function getAppliedDiscount(
+    product: Product
+  ) {
+    return (
+      product.discountPercent ??
+      globalDiscountPercent
+    );
+  }
+
+  function getFinalPrice(
+    product: Product
+  ) {
+    return calculateWebPrice(
+      getCurrentMeliPrice(product),
+      getAppliedDiscount(product)
+    );
+  }
+
   const featuredCount =
     products.filter(
       (product) =>
         product.featured
     ).length;
 
-  /*
-   * Los destacados se muestran según
-   * featuredOrder.
-   *
-   * Los no destacados mantienen su
-   * orden normal.
-   */
+  const customDiscountCount =
+    products.filter(
+      (product) =>
+        product.discountPercent !==
+        undefined
+    ).length;
+
   const orderedProducts =
     useMemo(() => {
       const featuredMap =
@@ -432,11 +558,6 @@ export default function AdminFeatured() {
               Boolean(product)
           );
 
-      /*
-       * Por seguridad, cualquier destacado
-       * que todavía no esté en featuredOrder
-       * se agrega al final.
-       */
       const remainingFeatured =
         products.filter(
           (product) =>
@@ -486,7 +607,11 @@ export default function AdminFeatured() {
               product.featured) ||
             (filter ===
               "not-featured" &&
-              !product.featured);
+              !product.featured) ||
+            (filter ===
+              "custom-discount" &&
+              product.discountPercent !==
+                undefined);
 
           return (
             matchesSearch &&
@@ -500,11 +625,6 @@ export default function AdminFeatured() {
       filter,
     ]);
 
-  /*
-   * Solo permitimos reordenar cuando
-   * estamos viendo TODOS los destacados,
-   * sin una búsqueda que oculte productos.
-   */
   const canReorder =
     filter === "featured" &&
     search.trim() === "";
@@ -514,20 +634,36 @@ export default function AdminFeatured() {
       <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-proxima text-xl font-bold text-zinc-950">
-            Destacados
+            Productos
           </h2>
 
           <p className="mt-2 font-proxima text-sm text-zinc-500">
-            Elegí los productos que se
+            Administrá los descuentos y
+            elegí los productos que se
             muestran en la página
             principal.
           </p>
+
+          {!loading && (
+            <p className="mt-2 font-proxima text-xs font-bold text-zinc-400">
+              Descuento general:{" "}
+              <span className="text-zinc-600">
+                {globalDiscountPercent}%
+              </span>
+            </p>
+          )}
         </div>
 
         {!loading && (
-          <span className="font-proxima text-sm font-bold text-zinc-500">
-            {featuredCount} destacados
-          </span>
+          <div className="flex flex-col items-start gap-1 md:items-end">
+            <span className="font-proxima text-sm font-bold text-zinc-500">
+              {featuredCount} destacados
+            </span>
+
+            <span className="font-proxima text-xs text-zinc-400">
+              {customDiscountCount} con descuento particular
+            </span>
+          </div>
         )}
       </div>
 
@@ -539,8 +675,8 @@ export default function AdminFeatured() {
 
       {!loading &&
         products.length > 0 && (
-          <div className="mb-5 flex flex-col gap-3 md:flex-row">
-            <div className="relative flex-1">
+          <div className="mb-5 flex flex-col gap-3">
+            <div className="relative">
               <svg
                 className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400"
                 viewBox="0 0 24 24"
@@ -584,6 +720,14 @@ export default function AdminFeatured() {
                   [
                     "not-featured",
                     "No destacados",
+                  ],
+                  [
+                    "custom-discount",
+                    `Descuento particular${
+                      customDiscountCount > 0
+                        ? ` (${customDiscountCount})`
+                        : ""
+                    }`,
                   ],
                 ] as const
               ).map(
@@ -646,9 +790,33 @@ export default function AdminFeatured() {
                 const modified =
                   isModified(product);
 
+                const discountModified =
+                  isDiscountModified(
+                    product
+                  );
+
                 const draggable =
                   canReorder &&
                   product.featured;
+
+                const currentMeliPrice =
+                  getCurrentMeliPrice(
+                    product
+                  );
+
+                const appliedDiscount =
+                  getAppliedDiscount(
+                    product
+                  );
+
+                const finalPrice =
+                  getFinalPrice(
+                    product
+                  );
+
+                const hasCustomDiscount =
+                  product.discountPercent !==
+                  undefined;
 
                 return (
                   <div
@@ -684,7 +852,7 @@ export default function AdminFeatured() {
                         null
                       )
                     }
-                    className={`flex items-center gap-4 rounded-xl border p-3 transition ${
+                    className={`flex flex-col gap-4 rounded-xl border p-3 transition sm:flex-row sm:items-center ${
                       draggingId ===
                       product.meliId
                         ? "scale-[0.99] opacity-50"
@@ -697,31 +865,33 @@ export default function AdminFeatured() {
                           : "border-zinc-200 bg-white"
                     }`}
                   >
-                    {draggable ? (
-                      <div
-                        className="flex w-5 shrink-0 cursor-grab select-none items-center justify-center text-lg font-bold leading-none tracking-[-3px] text-zinc-400 active:cursor-grabbing"
-                        title="Arrastrar para reordenar"
-                      >
-                        ⋮⋮
-                      </div>
-                    ) : (
-                      <div className="w-5 shrink-0" />
-                    )}
-
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
-                      {product.thumbnail ? (
-                        <img
-                          src={
-                            product.thumbnail
-                          }
-                          alt=""
-                          className="h-full w-full object-contain"
-                        />
+                    <div className="flex items-center gap-4">
+                      {draggable ? (
+                        <div
+                          className="flex w-5 shrink-0 cursor-grab select-none items-center justify-center text-lg font-bold leading-none tracking-[-3px] text-zinc-400 active:cursor-grabbing"
+                          title="Arrastrar para reordenar"
+                        >
+                          ⋮⋮
+                        </div>
                       ) : (
-                        <span className="font-proxima text-xs text-zinc-400">
-                          Sin imagen
-                        </span>
+                        <div className="w-5 shrink-0" />
                       )}
+
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">
+                        {product.thumbnail ? (
+                          <img
+                            src={
+                              product.thumbnail
+                            }
+                            alt=""
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <span className="font-proxima text-xs text-zinc-400">
+                            Sin imagen
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -729,50 +899,143 @@ export default function AdminFeatured() {
                         {product.title}
                       </p>
 
-                      <p className="mt-1 font-proxima text-sm text-zinc-500">
-                        {formatPrice(
-                          product.meliPrice,
-                          product.currencyId
-                        )}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-proxima text-sm text-zinc-500">
+                          ML:
+                        </span>
+
+                        <span className="font-proxima text-sm font-bold text-zinc-600">
+                          {formatPrice(
+                            currentMeliPrice,
+                            product.currencyId
+                          )}
+                        </span>
+
+                        <span className="text-zinc-300">
+                          →
+                        </span>
+
+                        <span className="font-proxima text-sm font-bold text-emerald-600">
+                          {formatPrice(
+                            finalPrice,
+                            product.currencyId
+                          )}
+                        </span>
+                      </div>
                     </div>
 
-                    {modified && (
-                      <span className="hidden shrink-0 rounded-xl bg-[#45d354]/10 px-3 py-2 font-proxima text-xs font-bold text-[#22963a] sm:block">
-                        Modificado
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={
-                        product.featured
-                      }
-                      aria-label={
-                        product.featured
-                          ? `Quitar ${product.title} de destacados`
-                          : `Agregar ${product.title} a destacados`
-                      }
-                      onClick={() =>
-                        toggleFeatured(
-                          product
-                        )
-                      }
-                      className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-                        product.featured
-                          ? "bg-zinc-950"
-                          : "bg-zinc-300"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
-                          product.featured
-                            ? "left-6"
-                            : "left-1"
+                    <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+                      <div
+                        className={`rounded-xl border bg-white px-3 py-2 ${
+                          discountModified
+                            ? "border-[#45d354] ring-2 ring-[#45d354]/10"
+                            : "border-zinc-200"
                         }`}
-                      />
-                    </button>
+                      >
+                        <div className="flex items-center gap-2">
+                          <label
+                            htmlFor={`discount-${product.meliId}`}
+                            className="font-proxima text-xs font-bold text-zinc-500"
+                          >
+                            Descuento
+                          </label>
+
+                          <div className="flex items-center">
+                            <input
+                              id={`discount-${product.meliId}`}
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={
+                                product.discountPercent ??
+                                ""
+                              }
+                              placeholder={String(
+                                globalDiscountPercent
+                              )}
+                              onChange={(event) =>
+                                updateDiscount(
+                                  product,
+                                  event.target.value
+                                )
+                              }
+                              className="w-14 bg-transparent text-right font-proxima text-sm font-bold text-zinc-950 outline-none placeholder:text-zinc-300"
+                              aria-label={`Descuento de ${product.title}`}
+                            />
+
+                            <span className="font-proxima text-sm font-bold text-zinc-500">
+                              %
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="mt-1 font-proxima text-xs text-zinc-400">
+                          {hasCustomDiscount ? (
+                            <>
+                              Particular:{" "}
+                              <span className="font-bold text-zinc-600">
+                                {product.discountPercent}%
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              Global:{" "}
+                              <span className="font-bold text-zinc-600">
+                                {globalDiscountPercent}%
+                              </span>
+                            </>
+                          )}
+                        </p>
+
+                        <p className="mt-1 font-proxima text-xs text-zinc-400">
+                          SOGUE:{" "}
+                          <span className="font-bold text-emerald-600">
+                            {formatPrice(
+                              finalPrice,
+                              product.currencyId
+                            )}
+                          </span>
+                        </p>
+                      </div>
+
+                      {modified && (
+                        <span className="hidden shrink-0 rounded-xl bg-[#45d354]/10 px-3 py-2 font-proxima text-xs font-bold text-[#22963a] lg:block">
+                          Modificado
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={
+                          product.featured
+                        }
+                        aria-label={
+                          product.featured
+                            ? `Quitar ${product.title} de destacados`
+                            : `Agregar ${product.title} a destacados`
+                        }
+                        onClick={() =>
+                          toggleFeatured(
+                            product
+                          )
+                        }
+                        className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                          product.featured
+                            ? "bg-zinc-950"
+                            : "bg-zinc-300"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                            product.featured
+                              ? "left-6"
+                              : "left-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
                 );
               }

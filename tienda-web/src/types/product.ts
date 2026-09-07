@@ -11,6 +11,7 @@ export interface Product {
   visible: boolean;
   featured: boolean;
   featuredOrder?: number;
+  discountPercent?: number;
   categoryId: string;
   updatedAt: Date;
 }

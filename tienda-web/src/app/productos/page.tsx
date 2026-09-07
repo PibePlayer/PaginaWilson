@@ -1,8 +1,10 @@
 import { withDatabase } from "@/lib/db";
 import { getMeliDiscountPercent } from "@/lib/settings";
 import { calculateWebPrice } from "@/lib/pricing";
+
 import type { Product } from "@/types/product";
 import type { Category } from "@/types/category";
+
 import ProductCatalog from "@/components/ProductCatalog";
 
 const PAGE_SIZE = 12;
@@ -19,7 +21,8 @@ interface ProductsPageProps {
 export default async function ProductsPage({
   searchParams,
 }: ProductsPageProps) {
-  const params = await searchParams;
+  const params =
+    await searchParams;
 
   const search =
     params.search?.trim() || "";
@@ -38,13 +41,24 @@ export default async function ProductsPage({
     formattedCategories,
     total,
   } = await withDatabase(async (db) => {
-    const discountPercent =
+    /*
+     * Descuento global de la tienda.
+     *
+     * Se utiliza como fallback para productos
+     * que no tengan un descuento individual.
+     */
+    const globalDiscountPercent =
       await getMeliDiscountPercent(db);
 
     const productsCollection =
-      db.collection<Product>("products");
+      db.collection<Product>(
+        "products"
+      );
 
-    const filter: Record<string, unknown> = {
+    const filter: Record<
+      string,
+      unknown
+    > = {
       visible: true,
     };
 
@@ -56,29 +70,9 @@ export default async function ProductsPage({
     }
 
     if (categoryId !== "all") {
-      filter.categoryId = categoryId;
+      filter.categoryId =
+        categoryId;
     }
-
-    /*
-     * El filtro que ingresa el usuario corresponde
-     * al precio FINAL de SOGUE.
-     *
-     * Ejemplo:
-     *
-     * Precio ML efectivo: $800.000
-     * Descuento SOGUE: 10%
-     * Precio SOGUE: $720.000
-     *
-     * Si el usuario busca $700.000 - $750.000,
-     * debemos encontrar productos cuyo precio ML
-     * efectivo esté aproximadamente entre:
-     *
-     * $700.000 / 0,90 = $777.777
-     * $750.000 / 0,90 = $833.333
-     *
-     * Por eso convertimos el rango antes de
-     * consultar MongoDB.
-     */
 
     const minPriceNumber =
       Number(minPrice);
@@ -88,79 +82,176 @@ export default async function ProductsPage({
 
     const hasMinPrice =
       minPrice !== "" &&
-      Number.isFinite(minPriceNumber);
+      Number.isFinite(
+        minPriceNumber
+      );
 
     const hasMaxPrice =
       maxPrice !== "" &&
-      Number.isFinite(maxPriceNumber);
+      Number.isFinite(
+        maxPriceNumber
+      );
 
-    const discountFactor =
-      1 - discountPercent / 100;
+    /*
+     * El filtro de precio corresponde
+     * al precio FINAL de SOGUE.
+     *
+     * Cada producto puede tener un descuento
+     * individual diferente, por lo que debemos
+     * calcular el precio final de cada producto
+     * dentro de MongoDB antes de filtrar.
+     */
+    const priceFilter: Record<
+      string,
+      number
+    > = {};
 
-    if (
-      (hasMinPrice || hasMaxPrice) &&
-      discountFactor > 0
-    ) {
-      const meliPriceFilter: Record<
-        string,
-        number
-      > = {};
+    if (hasMinPrice) {
+      priceFilter.$gte =
+        minPriceNumber;
+    }
 
-      if (hasMinPrice) {
-        meliPriceFilter.$gte =
-          minPriceNumber /
-          discountFactor;
-      }
+    if (hasMaxPrice) {
+      priceFilter.$lte =
+        maxPriceNumber;
+    }
 
-      if (hasMaxPrice) {
-        meliPriceFilter.$lte =
-          maxPriceNumber /
-          discountFactor;
-      }
+    /*
+     * Pipeline base.
+     */
+    const pipeline: Record<
+      string,
+      unknown
+    >[] = [
+      {
+        $match: filter,
+      },
 
       /*
-       * Preferimos meliDiscountedPrice,
-       * porque representa el precio efectivo
-       * actual de MercadoLibre.
+       * Precio efectivo de MercadoLibre.
        *
-       * Para productos antiguos que todavía
-       * no tengan ese campo, utilizamos meliPrice
-       * como fallback.
+       * Si hay promoción:
+       *   meliDiscountedPrice
+       *
+       * Si no:
+       *   meliPrice
        */
-      filter.$or = [
-        {
-          meliDiscountedPrice:
-            meliPriceFilter,
-        },
-        {
-          meliDiscountedPrice: {
-            $exists: false,
+      {
+        $addFields: {
+          effectiveMeliPrice: {
+            $ifNull: [
+              "$meliDiscountedPrice",
+              "$meliPrice",
+            ],
           },
-          meliPrice:
-            meliPriceFilter,
+
+          /*
+           * Descuento individual si existe.
+           * De lo contrario, descuento global.
+           */
+          effectiveDiscountPercent: {
+            $ifNull: [
+              "$discountPercent",
+              globalDiscountPercent,
+            ],
+          },
         },
-      ];
+      },
+
+      /*
+       * Calculamos el precio final SOGUE.
+       */
+      {
+        $addFields: {
+          webPrice: {
+            $round: [
+              {
+                $multiply: [
+                  "$effectiveMeliPrice",
+                  {
+                    $subtract: [
+                      1,
+                      {
+                        $divide: [
+                          "$effectiveDiscountPercent",
+                          100,
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              0,
+            ],
+          },
+        },
+      },
+    ];
+
+    /*
+     * Filtramos por precio final SOGUE.
+     */
+    if (
+      Object.keys(priceFilter)
+        .length > 0
+    ) {
+      pipeline.push({
+        $match: {
+          webPrice:
+            priceFilter,
+        },
+      });
     }
+
+    /*
+     * Obtenemos los productos de esta página.
+     */
+    const productsPipeline = [
+      ...pipeline,
+
+      {
+        $sort: {
+          title: 1,
+        },
+      },
+
+      {
+        $limit: PAGE_SIZE,
+      },
+    ];
+
+    /*
+     * Conteo total.
+     */
+    const countPipeline = [
+      ...pipeline,
+
+      {
+        $count: "total",
+      },
+    ];
 
     const [
       products,
-      total,
+      countResult,
       categories,
     ] = await Promise.all([
       productsCollection
-        .find(filter)
-        .sort({
-          title: 1,
-        })
-        .limit(PAGE_SIZE)
+        .aggregate<Product>(
+          productsPipeline
+        )
         .toArray(),
 
-      productsCollection.countDocuments(
-        filter
-      ),
+      productsCollection
+        .aggregate<{
+          total: number;
+        }>(countPipeline)
+        .toArray(),
 
       db
-        .collection<Category>("categories")
+        .collection<Category>(
+          "categories"
+        )
         .find({})
         .sort({
           name: 1,
@@ -168,16 +259,33 @@ export default async function ProductsPage({
         .toArray(),
     ]);
 
+    const total =
+      countResult[0]?.total ?? 0;
+
     return {
       formattedProducts:
         products.map((product) => {
+          /*
+           * Precio efectivo actual de ML.
+           */
           const currentMeliPrice =
             product.meliDiscountedPrice ??
             product.meliPrice;
 
+          /*
+           * Descuento individual tiene
+           * prioridad sobre el global.
+           */
+          const effectiveDiscountPercent =
+            product.discountPercent ??
+            globalDiscountPercent;
+
           return {
-            meliId: product.meliId,
-            title: product.title,
+            meliId:
+              product.meliId,
+
+            title:
+              product.title,
 
             meliPrice:
               product.meliPrice,
@@ -212,24 +320,33 @@ export default async function ProductsPage({
             updatedAt:
               product.updatedAt.toISOString(),
 
+            /*
+             * Precio final SOGUE.
+             */
             webPrice:
               calculateWebPrice(
                 currentMeliPrice,
-                discountPercent
+                effectiveDiscountPercent
               ),
 
-            discountPercent,
+            /*
+             * Descuento realmente utilizado.
+             */
+            discountPercent:
+              effectiveDiscountPercent,
           };
         }),
 
       formattedCategories:
-        categories.map((category) => ({
-          categoryId:
-            category.categoryId,
+        categories.map(
+          (category) => ({
+            categoryId:
+              category.categoryId,
 
-          name:
-            category.name,
-        })),
+            name:
+              category.name,
+          })
+        ),
 
       total,
     };
@@ -238,6 +355,7 @@ export default async function ProductsPage({
   return (
     <main className="min-h-screen bg-zinc-100 pt-24">
       <section className="mx-auto max-w-7xl px-6 pb-24">
+
         <ProductCatalog
           key={`${search}|${categoryId}|${minPrice}|${maxPrice}`}
           initialProducts={
@@ -251,9 +369,14 @@ export default async function ProductsPage({
           initialCategoryId={
             categoryId
           }
-          initialMinPrice={minPrice}
-          initialMaxPrice={maxPrice}
+          initialMinPrice={
+            minPrice
+          }
+          initialMaxPrice={
+            maxPrice
+          }
         />
+
       </section>
     </main>
   );

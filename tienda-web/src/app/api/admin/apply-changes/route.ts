@@ -17,8 +17,14 @@ interface FeaturedChange {
   featured: boolean;
 }
 
+interface ProductDiscountChange {
+  meliId: string;
+  discountPercent: number;
+}
+
 interface ApplyChangesBody {
   discountPercent?: number;
+  productDiscounts?: ProductDiscountChange[];
   categories?: CategoryChange[];
   featured?: FeaturedChange[];
   featuredOrder?: string[];
@@ -38,6 +44,9 @@ export async function POST(
     const body =
       (await request.json()) as ApplyChangesBody;
 
+    /*
+     * Descuento global
+     */
     if (
       body.discountPercent !==
         undefined &&
@@ -73,6 +82,13 @@ export async function POST(
         ? body.featured
         : [];
 
+    const productDiscounts =
+      Array.isArray(
+        body.productDiscounts
+      )
+        ? body.productDiscounts
+        : [];
+
     const hasFeaturedOrder =
       Array.isArray(
         body.featuredOrder
@@ -83,6 +99,9 @@ export async function POST(
         ? body.featuredOrder!
         : [];
 
+    /*
+     * Validar categorías
+     */
     for (const category of categories) {
       if (
         typeof category.categoryId !==
@@ -121,6 +140,9 @@ export async function POST(
       }
     }
 
+    /*
+     * Validar destacados
+     */
     for (const product of featured) {
       if (
         typeof product.meliId !==
@@ -142,6 +164,59 @@ export async function POST(
       }
     }
 
+    /*
+     * Validar descuentos individuales
+     */
+    const discountIds =
+      new Set<string>();
+
+    for (const product of productDiscounts) {
+      if (
+        typeof product.meliId !==
+          "string" ||
+        !product.meliId.trim() ||
+        !Number.isFinite(
+          product.discountPercent
+        ) ||
+        product.discountPercent < 0 ||
+        product.discountPercent > 100
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Hay un descuento individual inválido. El descuento debe estar entre 0 y 100.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const meliId =
+        product.meliId.trim();
+
+      if (
+        discountIds.has(meliId)
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Hay productos repetidos en los descuentos individuales.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      discountIds.add(meliId);
+    }
+
+    /*
+     * Validar orden de destacados
+     */
     if (hasFeaturedOrder) {
       if (
         featuredOrder.some(
@@ -187,6 +262,9 @@ export async function POST(
 
     await withDatabase(
       async (db) => {
+        /*
+         * Descuento global
+         */
         if (
           body.discountPercent !==
           undefined
@@ -211,6 +289,41 @@ export async function POST(
             );
         }
 
+        /*
+         * Descuentos individuales
+         */
+        if (
+          productDiscounts.length > 0
+        ) {
+          await db
+            .collection<Product>(
+              "products"
+            )
+            .bulkWrite(
+              productDiscounts.map(
+                (product) => ({
+                  updateOne: {
+                    filter: {
+                      meliId:
+                        product.meliId.trim(),
+                    },
+                    update: {
+                      $set: {
+                        discountPercent:
+                          product.discountPercent,
+                        updatedAt:
+                          new Date(),
+                      },
+                    },
+                  },
+                })
+              )
+            );
+        }
+
+        /*
+         * Categorías
+         */
         if (
           categories.length > 0
         ) {
@@ -238,11 +351,16 @@ export async function POST(
             );
         }
 
+        /*
+         * Estado destacado
+         */
         if (
           featured.length > 0
         ) {
           await db
-            .collection<Product>("products")
+            .collection<Product>(
+              "products"
+            )
             .bulkWrite(
               featured.map(
                 (product) => ({
@@ -265,6 +383,9 @@ export async function POST(
             );
         }
 
+        /*
+         * Orden de destacados
+         */
         if (hasFeaturedOrder) {
           const currentProducts =
             await db
@@ -392,7 +513,8 @@ export async function POST(
                 },
                 {
                   $unset: {
-                    featuredOrder: "",
+                    featuredOrder:
+                      "",
                   },
                 }
               );

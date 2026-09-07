@@ -5,6 +5,7 @@ import {
 
 import { requireAdminApi } from "@/lib/require-admin-api";
 import { withDatabase } from "@/lib/db";
+import { getMeliDiscountPercent } from "@/lib/settings";
 import type { Product } from "@/types/product";
 
 export async function GET(
@@ -18,19 +19,33 @@ export async function GET(
   }
 
   try {
-    const products =
-      await withDatabase(async (db) =>
-        db
-          .collection<Product>("products")
-          .find({
-            visible: true,
-          })
-          .sort({
-            featured: -1,
-            title: 1,
-          })
-          .toArray()
-      );
+    const result =
+      await withDatabase(async (db) => {
+        const products =
+          await db
+            .collection<Product>("products")
+            .find({
+              visible: true,
+            })
+            .sort({
+              featured: -1,
+              title: 1,
+            })
+            .toArray();
+
+        const globalDiscountPercent =
+          await getMeliDiscountPercent(db);
+
+        return {
+          products,
+          globalDiscountPercent,
+        };
+      });
+
+    const {
+      products,
+      globalDiscountPercent,
+    } = result;
 
     const featuredProducts =
       products
@@ -65,11 +80,9 @@ export async function GET(
 
     /*
      * Los productos que todavía no tienen
-     * featuredOrder reciben un orden temporal
-     * basado en la posición actual.
+     * featuredOrder reciben un orden temporal.
      *
      * No escribimos en Mongo desde el GET.
-     * Se persistirá al presionar "Aplicar cambios".
      */
     const normalizedFeatured =
       featuredProducts.map(
@@ -89,6 +102,7 @@ export async function GET(
     const response =
       NextResponse.json({
         success: true,
+        globalDiscountPercent,
         products:
           orderedProducts.map(
             (product) => ({
@@ -98,6 +112,8 @@ export async function GET(
                 product.title,
               meliPrice:
                 product.meliPrice,
+              meliDiscountedPrice:
+                product.meliDiscountedPrice,
               currencyId:
                 product.currencyId,
               availableQuantity:
@@ -110,11 +126,21 @@ export async function GET(
                 product.featured
                   ? product.featuredOrder
                   : undefined,
+
+              /*
+               * IMPORTANTE:
+               * undefined significa "usar descuento global".
+               * No convertirlo a 0.
+               */
+              discountPercent:
+                product.discountPercent,
             })
           ),
       });
 
-    await auth.refreshCookie(response);
+    await auth.refreshCookie(
+      response
+    );
 
     return response;
   } catch (error) {
@@ -135,7 +161,9 @@ export async function GET(
         }
       );
 
-    await auth.refreshCookie(response);
+    await auth.refreshCookie(
+      response
+    );
 
     return response;
   }
@@ -219,7 +247,9 @@ export async function PATCH(
         featured,
       });
 
-    await auth.refreshCookie(response);
+    await auth.refreshCookie(
+      response
+    );
 
     return response;
   } catch (error) {
@@ -240,7 +270,9 @@ export async function PATCH(
         }
       );
 
-    await auth.refreshCookie(response);
+    await auth.refreshCookie(
+      response
+    );
 
     return response;
   }
