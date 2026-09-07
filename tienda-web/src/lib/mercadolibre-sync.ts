@@ -1,7 +1,10 @@
 import type { Db } from "mongodb";
 import { withDatabase } from "@/lib/db";
 import { mercadoLibreFetch } from "@/lib/mercadolibre";
-import type { Product } from "@/types/product";
+import type {
+  Product,
+  ProductAttribute,
+} from "@/types/product";
 import type { Category } from "@/types/category";
 
 interface SearchResponse {
@@ -22,6 +25,19 @@ interface MercadoLibrePicture {
   max_size: string;
 }
 
+interface MercadoLibreAttribute {
+  id: string;
+  name: string;
+  value_id?: string | null;
+  value_name?: string | null;
+  value_struct?: {
+    number?: number;
+    unit?: string;
+  } | null;
+  attribute_group_id?: string | null;
+  attribute_group_name?: string | null;
+}
+
 interface MercadoLibreItem {
   id: string;
   title: string;
@@ -32,6 +48,7 @@ interface MercadoLibreItem {
   status: string;
   category_id: string;
   pictures: MercadoLibrePicture[];
+  attributes?: MercadoLibreAttribute[];
 }
 
 interface MercadoLibreMultiGetResult {
@@ -53,6 +70,13 @@ interface MercadoLibreSalePrice {
   amount: number;
   regular_amount: number | null;
   currency_id: string;
+}
+
+interface MercadoLibreDescription {
+  text?: string;
+  plain_text?: string;
+  last_updated?: string;
+  date_created?: string;
 }
 
 const categoryCache = new Map<string, string>();
@@ -147,6 +171,28 @@ async function getMercadoLibreSalePrice(
     undefined,
     db
   );
+}
+
+async function getMercadoLibreDescription(
+  db: Db,
+  itemId: string
+): Promise<MercadoLibreDescription | null> {
+  try {
+    return await mercadoLibreFetch<MercadoLibreDescription>(
+      `/items/${encodeURIComponent(
+        itemId
+      )}/description`,
+      undefined,
+      db
+    );
+  } catch (error) {
+    console.error(
+      `MercadoLibre description fetch error: ${itemId}`,
+      error
+    );
+
+    return null;
+  }
 }
 
 /**
@@ -253,12 +299,48 @@ export async function syncMercadoLibreProducts() {
               item.category_id
             );
 
+          const description =
+            await getMercadoLibreDescription(
+              db,
+              item.id
+            );
+
           const regularPrice =
             salePrice.regular_amount ??
             salePrice.amount;
 
           const discountedPrice =
             salePrice.amount;
+
+          const pictures = Array.from(
+            new Set(
+              item.pictures
+                ?.map((picture) => picture.secure_url)
+                .filter(Boolean) ?? []
+            )
+          ).slice(0, 8);
+
+          const mainImage = pictures[0] ?? item.thumbnail;
+
+          const attributes: ProductAttribute[] =
+            (item.attributes ?? []).map(
+              (attribute) => ({
+                id: attribute.id,
+                name: attribute.name,
+                value_id:
+                  attribute.value_id ?? null,
+                value_name:
+                  attribute.value_name ?? null,
+                value_struct:
+                  attribute.value_struct ?? null,
+                attribute_group_id:
+                  attribute.attribute_group_id ??
+                  null,
+                attribute_group_name:
+                  attribute.attribute_group_name ??
+                  null,
+              })
+            );
 
           operations.push({
             updateOne: {
@@ -269,7 +351,9 @@ export async function syncMercadoLibreProducts() {
               update: {
                 $set: {
                   meliId: item.id,
-                  title: item.title,
+
+                  title:
+                    item.title,
 
                   meliPrice:
                     regularPrice,
@@ -285,9 +369,10 @@ export async function syncMercadoLibreProducts() {
                     item.available_quantity,
 
                   thumbnail:
-                    item.pictures?.[0]
-                      ?.secure_url ??
+                    pictures[0] ??
                     item.thumbnail,
+
+                  pictures,
 
                   permalink:
                     item.permalink,
@@ -301,6 +386,12 @@ export async function syncMercadoLibreProducts() {
                     item.category_id,
 
                   categoryName,
+
+                  description:
+                    description?.plain_text ??
+                    "",
+
+                  attributes,
 
                   updatedAt:
                     new Date(),

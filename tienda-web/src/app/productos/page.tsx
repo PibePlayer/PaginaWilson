@@ -15,14 +15,14 @@ interface ProductsPageProps {
     categoryId?: string;
     minPrice?: string;
     maxPrice?: string;
+    discount?: string;
   }>;
 }
 
 export default async function ProductsPage({
   searchParams,
 }: ProductsPageProps) {
-  const params =
-    await searchParams;
+  const params = await searchParams;
 
   const search =
     params.search?.trim() || "";
@@ -36,29 +36,22 @@ export default async function ProductsPage({
   const maxPrice =
     params.maxPrice || "";
 
+  const discount =
+    params.discount || "";
+
   const {
     formattedProducts,
     formattedCategories,
+    discountOptions,
     total,
   } = await withDatabase(async (db) => {
-    /*
-     * Descuento global de la tienda.
-     *
-     * Se utiliza como fallback para productos
-     * que no tengan un descuento individual.
-     */
     const globalDiscountPercent =
       await getMeliDiscountPercent(db);
 
     const productsCollection =
-      db.collection<Product>(
-        "products"
-      );
+      db.collection<Product>("products");
 
-    const filter: Record<
-      string,
-      unknown
-    > = {
+    const filter: Record<string, unknown> = {
       visible: true,
     };
 
@@ -70,8 +63,7 @@ export default async function ProductsPage({
     }
 
     if (categoryId !== "all") {
-      filter.categoryId =
-        categoryId;
+      filter.categoryId = categoryId;
     }
 
     const minPriceNumber =
@@ -80,31 +72,22 @@ export default async function ProductsPage({
     const maxPriceNumber =
       Number(maxPrice);
 
+    const discountNumber =
+      Number(discount);
+
     const hasMinPrice =
       minPrice !== "" &&
-      Number.isFinite(
-        minPriceNumber
-      );
+      Number.isFinite(minPriceNumber);
 
     const hasMaxPrice =
       maxPrice !== "" &&
-      Number.isFinite(
-        maxPriceNumber
-      );
+      Number.isFinite(maxPriceNumber);
 
-    /*
-     * El filtro de precio corresponde
-     * al precio FINAL de SOGUE.
-     *
-     * Cada producto puede tener un descuento
-     * individual diferente, por lo que debemos
-     * calcular el precio final de cada producto
-     * dentro de MongoDB antes de filtrar.
-     */
-    const priceFilter: Record<
-      string,
-      number
-    > = {};
+    const hasDiscountFilter =
+      discount !== "" &&
+      Number.isFinite(discountNumber);
+
+    const priceFilter: Record<string, number> = {};
 
     if (hasMinPrice) {
       priceFilter.$gte =
@@ -117,25 +100,16 @@ export default async function ProductsPage({
     }
 
     /*
-     * Pipeline base.
+     * Pipeline base:
+     * búsqueda + categoría + precio.
+     *
+     * El filtro de descuento se aplica después
+     * y NO forma parte de la generación de opciones.
      */
-    const pipeline: Record<
-      string,
-      unknown
-    >[] = [
+    const basePipeline: Record<string, unknown>[] = [
       {
         $match: filter,
       },
-
-      /*
-       * Precio efectivo de MercadoLibre.
-       *
-       * Si hay promoción:
-       *   meliDiscountedPrice
-       *
-       * Si no:
-       *   meliPrice
-       */
       {
         $addFields: {
           effectiveMeliPrice: {
@@ -145,10 +119,6 @@ export default async function ProductsPage({
             ],
           },
 
-          /*
-           * Descuento individual si existe.
-           * De lo contrario, descuento global.
-           */
           effectiveDiscountPercent: {
             $ifNull: [
               "$discountPercent",
@@ -157,10 +127,6 @@ export default async function ProductsPage({
           },
         },
       },
-
-      /*
-       * Calculamos el precio final SOGUE.
-       */
       {
         $addFields: {
           webPrice: {
@@ -189,52 +155,104 @@ export default async function ProductsPage({
     ];
 
     /*
-     * Filtramos por precio final SOGUE.
+     * El precio sí forma parte de los filtros actuales.
+     * Por eso las opciones de descuento se calculan
+     * después de aplicar este filtro.
      */
     if (
-      Object.keys(priceFilter)
-        .length > 0
+      Object.keys(priceFilter).length > 0
     ) {
-      pipeline.push({
+      basePipeline.push({
         $match: {
-          webPrice:
-            priceFilter,
+          webPrice: priceFilter,
         },
       });
     }
 
     /*
-     * Obtenemos los productos de esta página.
+     * Pipeline de productos:
+     * parte de los filtros actuales y recién acá
+     * aplica el descuento mínimo seleccionado.
      */
-    const productsPipeline = [
-      ...pipeline,
+    const productsPipeline: Record<string, unknown>[] = [
+      ...basePipeline,
+    ];
 
+    if (hasDiscountFilter) {
+      productsPipeline.push({
+        $match: {
+          effectiveDiscountPercent: {
+            $gte: discountNumber,
+          },
+        },
+      });
+    }
+
+    productsPipeline.push(
       {
         $sort: {
           title: 1,
         },
       },
-
       {
         $limit: PAGE_SIZE,
-      },
-    ];
+      }
+    );
 
     /*
-     * Conteo total.
+     * Opciones de descuento:
+     *
+     * Se calculan a partir de los productos que cumplen
+     * búsqueda + categoría + precio, pero IGNORANDO
+     * el descuento actualmente seleccionado.
+     *
+     * Así, si estamos viendo Notebooks y hay 5%, 10% y 20%,
+     * aparecen:
+     *
+     * 5% o más
+     * 10% o más
+     * 20% o más
      */
-    const countPipeline = [
-      ...pipeline,
-
+    const discountOptionsPipeline = [
+      ...basePipeline,
       {
-        $count: "total",
+        $group: {
+          _id: "$effectiveDiscountPercent",
+        },
+      },
+      {
+        $sort: {
+          _id: 1,
+        },
       },
     ];
+
+    const countPipeline = [
+      ...productsPipeline.slice(
+        0,
+        productsPipeline.length - 2
+      ),
+    ];
+
+    if (hasDiscountFilter) {
+      countPipeline.push({
+        $match: {
+          effectiveDiscountPercent: {
+            $gte: discountNumber,
+          },
+        },
+      });
+    }
+
+    countPipeline.push({
+      $count: "total",
+    });
 
     const [
       products,
       countResult,
       categories,
+      discountResults,
     ] = await Promise.all([
       productsCollection
         .aggregate<Product>(
@@ -243,39 +261,45 @@ export default async function ProductsPage({
         .toArray(),
 
       productsCollection
-        .aggregate<{
-          total: number;
-        }>(countPipeline)
+        .aggregate<{ total: number }>(
+          countPipeline
+        )
         .toArray(),
 
       db
-        .collection<Category>(
-          "categories"
-        )
+        .collection<Category>("categories")
         .find({})
-        .sort({
-          name: 1,
-        })
+        .sort({ name: 1 })
+        .toArray(),
+
+      productsCollection
+        .aggregate<{
+          _id: number;
+        }>(
+          discountOptionsPipeline
+        )
         .toArray(),
     ]);
 
     const total =
       countResult[0]?.total ?? 0;
 
+    const availableDiscountOptions =
+      discountResults
+        .map((item) => item._id)
+        .filter(
+          (value) =>
+            Number.isFinite(value) &&
+            value > 0
+        );
+
     return {
       formattedProducts:
         products.map((product) => {
-          /*
-           * Precio efectivo actual de ML.
-           */
           const currentMeliPrice =
             product.meliDiscountedPrice ??
             product.meliPrice;
 
-          /*
-           * Descuento individual tiene
-           * prioridad sobre el global.
-           */
           const effectiveDiscountPercent =
             product.discountPercent ??
             globalDiscountPercent;
@@ -320,18 +344,12 @@ export default async function ProductsPage({
             updatedAt:
               product.updatedAt.toISOString(),
 
-            /*
-             * Precio final SOGUE.
-             */
             webPrice:
               calculateWebPrice(
                 currentMeliPrice,
                 effectiveDiscountPercent
               ),
 
-            /*
-             * Descuento realmente utilizado.
-             */
             discountPercent:
               effectiveDiscountPercent,
           };
@@ -348,6 +366,9 @@ export default async function ProductsPage({
           })
         ),
 
+      discountOptions:
+        availableDiscountOptions,
+
       total,
     };
   });
@@ -355,14 +376,16 @@ export default async function ProductsPage({
   return (
     <main className="min-h-screen bg-zinc-100 pt-24">
       <section className="mx-auto max-w-7xl px-6 pb-24">
-
         <ProductCatalog
-          key={`${search}|${categoryId}|${minPrice}|${maxPrice}`}
+          key={`${search}|${categoryId}|${minPrice}|${maxPrice}|${discount}`}
           initialProducts={
             formattedProducts
           }
           categories={
             formattedCategories
+          }
+          discountOptions={
+            discountOptions
           }
           initialTotal={total}
           initialSearch={search}
@@ -375,8 +398,10 @@ export default async function ProductsPage({
           initialMaxPrice={
             maxPrice
           }
+          initialDiscount={
+            discount
+          }
         />
-
       </section>
     </main>
   );
