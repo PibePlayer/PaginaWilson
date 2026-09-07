@@ -60,6 +60,8 @@ export default function ProductCard({
           <img
             src={product.thumbnail}
             alt={product.title}
+            loading="lazy"
+            decoding="async"
             className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105"
           />
 

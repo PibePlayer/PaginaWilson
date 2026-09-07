@@ -51,6 +51,11 @@ const HIDDEN_ATTRIBUTE_IDS = new Set([
   // Datos poco útiles para el comprador
   "OPERATING_TEMPERATURE",
   "STORAGE_TEMPERATURE",
+
+  // Atributos comerciales / de catalogación que no queremos mostrar
+  "GIFTABLE",
+  "FREQUENTLY_PLAYED",
+  "OS_EDITION",
 ]);
 
 function slugify(value: string): string {
@@ -116,12 +121,95 @@ function cleanDescription(
   description: string | undefined,
   fallback: string
 ): string {
-  const text =
-    description?.trim() || fallback;
+  if (!description?.trim()) {
+    return fallback;
+  }
 
-  return text
-    .replace(/\s+/g, " ")
+  const text = description
+    .replace(/\r\n/g, "\n")
     .trim();
+
+  // Descripción limpia: conservarla completa.
+  const hasSellerContent =
+    /PREGUNTAS\s+FRECUENTES\s*:?/i.test(text) ||
+    /SOMOS\s+(?:SOGUE|LEGADO)/i.test(text) ||
+    /MERCADOLIBRE\s+PLATINUM/i.test(text);
+
+  if (!hasSellerContent) {
+    return text;
+  }
+
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((paragraph) =>
+      paragraph
+        .replace(/-{5,}/g, "")
+        .replace(/¯{5,}/g, "")
+        .trim()
+    )
+    .filter(Boolean);
+
+  const isEditorialParagraph = (paragraph: string): boolean => {
+    const normalized = paragraph
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (normalized.length < 120) {
+      return false;
+    }
+
+    if (
+      /^(?:CARACTERISTICAS|CARACTERÍSTICAS|ESPECIFICACIONES|PRODUCTO|GRÁFICOS|GRAFICOS|CONECTIVIDAD|PUERTOS|PESO|SEGURIDAD)\s*:?\s*$/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      /^(?:Procesador|Memoria|RAM|Disco|Disco rígido|Pantalla|Wi-?Fi|Bluetooth|Sistema Operativo|Idioma|Puertos|Peso|Batería|Cámara|Mouse|Teclado|Placa Gráfica|Video)\s*:/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const faqIndex = paragraphs.findIndex((paragraph) =>
+    /PREGUNTAS\s+FRECUENTES\s*:?\s*$/i.test(paragraph)
+  );
+
+  if (faqIndex >= 0) {
+    const afterFaq = paragraphs.slice(faqIndex + 1);
+
+    const editorialIndex = afterFaq.findIndex(
+      isEditorialParagraph
+    );
+
+    if (editorialIndex >= 0) {
+      return afterFaq
+        .slice(editorialIndex)
+        .join("\n\n")
+        .trim();
+    }
+
+    return fallback;
+  }
+
+  const editorialIndex = paragraphs.findIndex(
+    isEditorialParagraph
+  );
+
+  if (editorialIndex >= 0) {
+    return paragraphs
+      .slice(editorialIndex)
+      .join("\n\n")
+      .trim();
+  }
+
+  return fallback;
 }
 
 function formatPrice(
@@ -130,8 +218,7 @@ function formatPrice(
 ): string {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
-    currency:
-      currencyId || "ARS",
+    currency: currencyId || "ARS",
     maximumFractionDigits: 0,
   }).format(price);
 }
@@ -292,14 +379,17 @@ export default async function ProductPage({
     );
 
   const images = Array.from(
-        new Set(
-            product.pictures
-            ?.filter(Boolean)
-            .slice(0, 8) ?? []
-        )
-    );
+    new Set(
+      product.pictures
+        ?.filter(Boolean)
+        .slice(0, 8) ?? []
+    )
+  );
 
-  if (images.length === 0 && product.thumbnail) {
+  if (
+    images.length === 0 &&
+    product.thumbnail
+  ) {
     images.push(product.thumbnail);
   }
 
@@ -399,48 +489,48 @@ export default async function ProductPage({
 
   const visibleAttributes =
     (product.attributes ?? []).filter(
-        (attribute) => {
+      (attribute) => {
         if (
-            HIDDEN_ATTRIBUTE_IDS.has(
+          HIDDEN_ATTRIBUTE_IDS.has(
             attribute.id
-            )
+          )
         ) {
-            return false;
+          return false;
         }
 
         const value =
-            attribute.value_name?.trim() ||
-            (attribute.value_struct?.number !==
-            undefined
+          attribute.value_name?.trim() ||
+          (attribute.value_struct?.number !==
+          undefined
             ? `${attribute.value_struct.number}${
                 attribute.value_struct.unit
-                    ? ` ${attribute.value_struct.unit}`
-                    : ""
-                }`
+                  ? ` ${attribute.value_struct.unit}`
+                  : ""
+              }`
             : "");
 
         return Boolean(value);
-        }
+      }
     );
 
-    const attributeGroups =
+  const attributeGroups =
     visibleAttributes.reduce<
-        Record<
+      Record<
         string,
         ProductAttribute[]
-        >
+      >
     >((groups, attribute) => {
-        const group =
+      const group =
         attribute.attribute_group_name ||
         "Características";
 
-        if (!groups[group]) {
+      if (!groups[group]) {
         groups[group] = [];
-        }
+      }
 
-        groups[group].push(attribute);
+      groups[group].push(attribute);
 
-        return groups;
+      return groups;
     }, {});
 
   return (
@@ -450,7 +540,10 @@ export default async function ProductPage({
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(
             jsonLd
-          ).replace(/</g, "\\u003c"),
+          ).replace(
+            /</g,
+            "\\u003c"
+          ),
         }}
       />
 
@@ -459,7 +552,10 @@ export default async function ProductPage({
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(
             breadcrumbJsonLd
-          ).replace(/</g, "\\u003c"),
+          ).replace(
+            /</g,
+            "\\u003c"
+          ),
         }}
       />
 
@@ -503,13 +599,13 @@ export default async function ProductPage({
 
         <article>
           <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-            <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
               <div className="border-b border-zinc-200 lg:border-b-0 lg:border-r">
                 <ProductGallery
-                    images={images}
-                    title={product.title}
+                  images={images}
+                  title={product.title}
                 />
-            </div>
+              </div>
 
               <div className="flex flex-col p-6 sm:p-8 lg:p-10">
                 {product.categoryName && (
