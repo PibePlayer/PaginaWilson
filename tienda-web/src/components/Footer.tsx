@@ -64,12 +64,14 @@ export default function Footer() {
                 Nosotros
               </Link>
 
-              <Link
-                href="/servicio-tecnico"
+              <a
+                href="https://servicio-tecnico.pidal-mateo.workers.dev/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-fit font-proxima text-sm text-zinc-400 transition hover:text-white"
               >
-                Servicio Técnico
-              </Link>
+                Servicio Técnico para Notebooks
+              </a>
 
               <Link
                 href="/productos"

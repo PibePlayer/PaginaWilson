@@ -14,7 +14,6 @@
 	"routes": [
 		{
 			"pattern": "sogue.com.ar",
-			"zone_name": "sogue.com.ar",
 			"custom_domain": true,
 			"enabled": true,
 			"previews_enabled": false

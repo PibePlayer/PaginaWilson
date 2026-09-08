@@ -10,7 +10,7 @@ export default function ContactoPage() {
   );
 
   const mapQuery = encodeURIComponent(
-    "Galería Jardín, Buenos Aires, Argentina"
+    "Sogue Note"
   );
 
   return (
