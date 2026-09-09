@@ -65,7 +65,7 @@ export default function Footer() {
               </Link>
 
               <a
-                href="https://servicio-tecnico.pidal-mateo.workers.dev/"
+                href="https://paranote.com.ar/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-fit font-proxima text-sm text-zinc-400 transition hover:text-white"

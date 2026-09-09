@@ -4,21 +4,54 @@ import {
 } from "next/server";
 
 import { requireAdminApi } from "@/lib/require-admin-api";
-import { syncMercadoLibreProducts } from "@/lib/mercadolibre-sync";
+import {
+  syncMercadoLibreProducts,
+  type MercadoLibreSyncOptions,
+} from "@/lib/mercadolibre-sync";
 
 export async function POST(
   request: NextRequest
 ) {
-  const auth =
-    await requireAdminApi(request);
+  const auth = await requireAdminApi(request);
 
   if (!auth.authorized) {
     return auth.response;
   }
 
   try {
+    let body: MercadoLibreSyncOptions = {};
+
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+
     const result =
-      await syncMercadoLibreProducts();
+      await syncMercadoLibreProducts({
+        prices: body.prices === true,
+        descriptions:
+          body.descriptions === true,
+        discounts:
+          body.discounts === true,
+
+        images:
+          body.images === true,
+        stock:
+          body.stock === true,
+        productInfo:
+          body.productInfo === true,
+        category:
+          body.category === true,
+        attributes:
+          body.attributes === true,
+
+        quick:
+          body.quick === true,
+
+        missingDescriptionsOnly:
+          body.missingDescriptionsOnly === true,
+      });
 
     const response =
       NextResponse.json({

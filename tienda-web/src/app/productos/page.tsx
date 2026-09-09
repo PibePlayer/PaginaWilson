@@ -87,7 +87,8 @@ export default async function ProductsPage({
       discount !== "" &&
       Number.isFinite(discountNumber);
 
-    const priceFilter: Record<string, number> = {};
+    const priceFilter: Record<string, number> =
+      {};
 
     if (hasMinPrice) {
       priceFilter.$gte =
@@ -101,63 +102,91 @@ export default async function ProductsPage({
 
     /*
      * Pipeline base:
-     * búsqueda + categoría + precio.
      *
-     * El filtro de descuento se aplica después
-     * y NO forma parte de la generación de opciones.
+     * búsqueda + categoría
+     *
+     * Calculamos:
+     * - precio efectivo de MercadoLibre
+     * - descuento SOGUE efectivo
+     * - precio web
+     * - descuento total real
      */
-    const basePipeline: Record<string, unknown>[] = [
-      {
-        $match: filter,
-      },
-      {
-        $addFields: {
-          effectiveMeliPrice: {
-            $ifNull: [
-              "$meliDiscountedPrice",
-              "$meliPrice",
-            ],
-          },
+    const basePipeline: Record<string, unknown>[] =
+      [
+        {
+          $match: filter,
+        },
+        {
+          $addFields: {
+            effectiveMeliPrice: {
+              $ifNull: [
+                "$meliDiscountedPrice",
+                "$meliPrice",
+              ],
+            },
 
-          effectiveDiscountPercent: {
-            $ifNull: [
-              "$discountPercent",
-              globalDiscountPercent,
-            ],
+            effectiveDiscountPercent: {
+              $ifNull: [
+                "$discountPercent",
+                globalDiscountPercent,
+              ],
+            },
           },
         },
-      },
-      {
-        $addFields: {
-          webPrice: {
-            $round: [
-              {
-                $multiply: [
-                  "$effectiveMeliPrice",
-                  {
-                    $subtract: [
-                      1,
-                      {
-                        $divide: [
-                          "$effectiveDiscountPercent",
-                          100,
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-              0,
-            ],
+        {
+          $addFields: {
+            webPrice: {
+              $round: [
+                {
+                  $multiply: [
+                    "$effectiveMeliPrice",
+                    {
+                      $subtract: [
+                        1,
+                        {
+                          $divide: [
+                            "$effectiveDiscountPercent",
+                            100,
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                0,
+              ],
+            },
           },
         },
-      },
-    ];
+        {
+          $addFields: {
+            totalDiscountPercent: {
+              $round: [
+                {
+                  $multiply: [
+                    {
+                      $subtract: [
+                        1,
+                        {
+                          $divide: [
+                            "$webPrice",
+                            "$meliPrice",
+                          ],
+                        },
+                      ],
+                    },
+                    100,
+                  ],
+                },
+                1,
+              ],
+            },
+          },
+        },
+      ];
 
     /*
-     * El precio sí forma parte de los filtros actuales.
-     * Por eso las opciones de descuento se calculan
-     * después de aplicar este filtro.
+     * El precio sí forma parte de los filtros.
      */
     if (
       Object.keys(priceFilter).length > 0
@@ -170,18 +199,19 @@ export default async function ProductsPage({
     }
 
     /*
-     * Pipeline de productos:
-     * parte de los filtros actuales y recién acá
-     * aplica el descuento mínimo seleccionado.
+     * Productos:
+     * primero búsqueda + categoría + precio,
+     * después descuento total mínimo.
      */
-    const productsPipeline: Record<string, unknown>[] = [
-      ...basePipeline,
-    ];
+    const productsPipeline: Record<string, unknown>[] =
+      [
+        ...basePipeline,
+      ];
 
     if (hasDiscountFilter) {
       productsPipeline.push({
         $match: {
-          effectiveDiscountPercent: {
+          totalDiscountPercent: {
             $gte: discountNumber,
           },
         },
@@ -202,22 +232,29 @@ export default async function ProductsPage({
     /*
      * Opciones de descuento:
      *
-     * Se calculan a partir de los productos que cumplen
-     * búsqueda + categoría + precio, pero IGNORANDO
-     * el descuento actualmente seleccionado.
+     * Se calculan sobre búsqueda + categoría +
+     * precio, ignorando el descuento seleccionado.
      *
-     * Así, si estamos viendo Notebooks y hay 5%, 10% y 20%,
-     * aparecen:
-     *
-     * 5% o más
-     * 10% o más
-     * 20% o más
+     * IMPORTANTE:
+     * Ahora representan el DESCUENTO TOTAL REAL,
+     * es decir, la diferencia entre el precio original
+     * de MercadoLibre y el precio final de SOGUE.
      */
-    const discountOptionsPipeline = [
+    const discountOptionsPipeline: Record<
+      string,
+      unknown
+    >[] = [
       ...basePipeline,
       {
+        $match: {
+          totalDiscountPercent: {
+            $gt: 0,
+          },
+        },
+      },
+      {
         $group: {
-          _id: "$effectiveDiscountPercent",
+          _id: "$totalDiscountPercent",
         },
       },
       {
@@ -227,17 +264,18 @@ export default async function ProductsPage({
       },
     ];
 
-    const countPipeline = [
-      ...productsPipeline.slice(
-        0,
-        productsPipeline.length - 2
-      ),
-    ];
+    /*
+     * Conteo total.
+     */
+    const countPipeline: Record<string, unknown>[] =
+      [
+        ...basePipeline,
+      ];
 
     if (hasDiscountFilter) {
       countPipeline.push({
         $match: {
-          effectiveDiscountPercent: {
+          totalDiscountPercent: {
             $gte: discountNumber,
           },
         },
@@ -261,9 +299,9 @@ export default async function ProductsPage({
         .toArray(),
 
       productsCollection
-        .aggregate<{ total: number }>(
-          countPipeline
-        )
+        .aggregate<{
+          total: number;
+        }>(countPipeline)
         .toArray(),
 
       db
@@ -275,9 +313,7 @@ export default async function ProductsPage({
       productsCollection
         .aggregate<{
           _id: number;
-        }>(
-          discountOptionsPipeline
-        )
+        }>(discountOptionsPipeline)
         .toArray(),
     ]);
 
@@ -303,6 +339,32 @@ export default async function ProductsPage({
           const effectiveDiscountPercent =
             product.discountPercent ??
             globalDiscountPercent;
+
+          const webPrice =
+            calculateWebPrice(
+              currentMeliPrice,
+              effectiveDiscountPercent
+            );
+
+          /*
+           * Descuento total respecto al precio
+           * original de MercadoLibre.
+           *
+           * Se calcula usando el mismo precio web
+           * que se muestra en la card.
+           */
+          const totalDiscountPercent =
+            product.meliPrice > 0
+              ? ((product.meliPrice -
+                  webPrice) /
+                  product.meliPrice) *
+                100
+              : 0;
+
+          const roundedTotalDiscount =
+            Number(
+              totalDiscountPercent.toFixed(1)
+            );
 
           return {
             meliId:
@@ -344,14 +406,14 @@ export default async function ProductsPage({
             updatedAt:
               product.updatedAt.toISOString(),
 
-            webPrice:
-              calculateWebPrice(
-                currentMeliPrice,
-                effectiveDiscountPercent
-              ),
+            webPrice,
 
+            /*
+             * ProductCard utiliza este campo para
+             * mostrar el descuento total.
+             */
             discountPercent:
-              effectiveDiscountPercent,
+              roundedTotalDiscount,
           };
         }),
 

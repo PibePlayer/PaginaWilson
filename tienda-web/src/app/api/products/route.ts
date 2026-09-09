@@ -129,14 +129,15 @@ export async function GET(
         );
 
       /*
-       * Filtros actuales:
-       * búsqueda + categoría + precio.
+       * Filtros base:
        *
-       * No incluye descuento.
+       * búsqueda + categoría.
        *
-       * Esto es importante porque las opciones
-       * de descuento deben poder recalcularse
-       * independientemente del descuento seleccionado.
+       * Calculamos:
+       * - precio efectivo de MercadoLibre
+       * - descuento SOGUE
+       * - precio web
+       * - descuento total real
        */
       const basePipeline: Record<
         string,
@@ -187,8 +188,36 @@ export async function GET(
             },
           },
         },
+        {
+          $addFields: {
+            totalDiscountPercent: {
+              $round: [
+                {
+                  $multiply: [
+                    {
+                      $subtract: [
+                        1,
+                        {
+                          $divide: [
+                            "$webPrice",
+                            "$meliPrice",
+                          ],
+                        },
+                      ],
+                    },
+                    100,
+                  ],
+                },
+                1,
+              ],
+            },
+          },
+        },
       ];
 
+      /*
+       * El precio web forma parte de los filtros.
+       */
       if (
         Object.keys(
           priceFilterStages
@@ -204,8 +233,8 @@ export async function GET(
 
       /*
        * Productos:
-       * primero todos los filtros actuales,
-       * después el descuento mínimo.
+       * primero filtros base,
+       * después descuento total mínimo.
        */
       const productsPipeline: Record<
         string,
@@ -217,7 +246,7 @@ export async function GET(
       if (hasDiscountFilter) {
         productsPipeline.push({
           $match: {
-            effectiveDiscountPercent: {
+            totalDiscountPercent: {
               $gte: discount,
             },
           },
@@ -251,7 +280,7 @@ export async function GET(
       if (hasDiscountFilter) {
         countPipeline.push({
           $match: {
-            effectiveDiscountPercent: {
+            totalDiscountPercent: {
               $gte: discount,
             },
           },
@@ -265,8 +294,10 @@ export async function GET(
       /*
        * Opciones de descuento:
        *
-       * Se calculan sobre búsqueda + categoría +
-       * precio, ignorando el descuento seleccionado.
+       * búsqueda + categoría + precio,
+       * ignorando el descuento seleccionado.
+       *
+       * Ahora son DESCUENTOS TOTALES.
        */
       const discountOptionsPipeline: Record<
         string,
@@ -274,9 +305,16 @@ export async function GET(
       >[] = [
         ...basePipeline,
         {
+          $match: {
+            totalDiscountPercent: {
+              $gt: 0,
+            },
+          },
+        },
+        {
           $group: {
             _id:
-              "$effectiveDiscountPercent",
+              "$totalDiscountPercent",
           },
         },
         {
@@ -343,6 +381,31 @@ export async function GET(
               product.discountPercent ??
               globalDiscountPercent;
 
+            const webPrice =
+              calculateWebPrice(
+                effectiveMeliPrice,
+                effectiveDiscountPercent
+              );
+
+            /*
+             * Descuento total respecto al precio
+             * original de MercadoLibre.
+             */
+            const totalDiscountPercent =
+              product.meliPrice > 0
+                ? ((product.meliPrice -
+                    webPrice) /
+                    product.meliPrice) *
+                  100
+                : 0;
+
+            const roundedTotalDiscount =
+              Number(
+                totalDiscountPercent.toFixed(
+                  1
+                )
+              );
+
             return {
               meliId:
                 product.meliId,
@@ -354,7 +417,7 @@ export async function GET(
                 product.meliPrice,
 
               meliDiscountedPrice:
-                effectiveMeliPrice,
+                product.meliDiscountedPrice,
 
               currencyId:
                 product.currencyId,
@@ -383,14 +446,14 @@ export async function GET(
               updatedAt:
                 product.updatedAt.toISOString(),
 
-              webPrice:
-                calculateWebPrice(
-                  effectiveMeliPrice,
-                  effectiveDiscountPercent
-                ),
+              webPrice,
 
+              /*
+               * ProductCard espera este campo
+               * para mostrar el descuento total.
+               */
               discountPercent:
-                effectiveDiscountPercent,
+                roundedTotalDiscount,
             };
           }
         );

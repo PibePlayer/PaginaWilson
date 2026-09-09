@@ -317,9 +317,8 @@ export default function ProductCatalog({
        * El API recalcula las opciones según
        * categoría + búsqueda + precio.
        *
-       * No importa qué descuento esté seleccionado:
-       * las opciones siempre representan el universo
-       * disponible sin ese filtro.
+       * Las opciones representan el universo
+       * disponible sin aplicar el descuento actual.
        */
       setDiscountOptions(
         data.discountOptions ??
@@ -500,6 +499,141 @@ export default function ProductCatalog({
       )
     );
 
+  /*
+   * Los descuentos disponibles son los descuentos
+   * reales de los productos actuales.
+   *
+   * Se agrega 0% como opción para representar
+   * "Todos los descuentos".
+   *
+   * Se eliminan duplicados y se ordenan.
+   */
+  const discountSteps =
+    Array.from(
+      new Set([
+        0,
+        ...discountOptions.filter(
+          (value) =>
+            Number.isFinite(
+              value
+            ) &&
+            value > 0
+        ),
+      ])
+    ).sort(
+      (a, b) =>
+        a - b
+    );
+
+  /*
+   * El máximo es el descuento real más alto
+   * disponible en el universo actual.
+   *
+   * La escala del slider representa el porcentaje
+   * real, no el índice de la opción.
+   *
+   * Ejemplo:
+   * 0%, 5%, 50%
+   *
+   * 5% queda al 10% del recorrido.
+   */
+  const maxDiscount =
+    discountSteps.length > 1
+      ? discountSteps[
+          discountSteps.length - 1
+        ]
+      : 0;
+
+  const parsedSelectedDiscount =
+    Number(
+      selectedDiscount
+    );
+
+  /*
+   * Si el descuento seleccionado ya no existe
+   * después de cambiar categoría/filtros, limitamos
+   * el valor al rango actual.
+   */
+  const selectedDiscountValue =
+    selectedDiscount === "" ||
+    !Number.isFinite(
+      parsedSelectedDiscount
+    )
+      ? 0
+      : Math.min(
+          Math.max(
+            parsedSelectedDiscount,
+            0
+          ),
+          maxDiscount
+        );
+
+  function getClosestDiscount(
+    value: number
+  ) {
+    if (
+      discountSteps.length ===
+      0
+    ) {
+      return 0;
+    }
+
+    return discountSteps.reduce(
+      (
+        closest,
+        current
+      ) => {
+        return Math.abs(
+          current - value
+        ) <
+          Math.abs(
+            closest - value
+          )
+          ? current
+          : closest;
+      },
+      discountSteps[0]
+    );
+  }
+
+  function handleDiscountChange(
+    value: number
+  ) {
+    const closestDiscount =
+      getClosestDiscount(
+        value
+      );
+
+    setSelectedDiscount(
+      closestDiscount === 0
+        ? ""
+        : String(
+            closestDiscount
+          )
+    );
+  }
+
+  function formatDiscount(
+    value: number
+  ) {
+    return value.toLocaleString(
+      "es-AR",
+      {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1,
+      }
+    );
+  }
+
+  /*
+   * El valor visual siempre corresponde a una
+   * opción real disponible.
+   */
+  const visualDiscountValue =
+    getClosestDiscount(
+      selectedDiscountValue
+    );
+
   return (
     <>
       {/* Categorías */}
@@ -644,43 +778,77 @@ export default function ProductCatalog({
               : "pointer-events-none scale-95 opacity-0"
           }`}
         >
-          <div className="mb-4">
-            <label
-              htmlFor="discount-filter"
-              className="mb-2 block font-proxima text-sm font-bold text-zinc-900"
-            >
-              Descuento mínimo
-            </label>
+          {/* Descuento */}
+          <div className="mb-5">
+            <div className="mb-4 flex items-center justify-between">
+              <label
+                htmlFor="discount-filter"
+                className="font-proxima text-sm font-bold text-zinc-900"
+              >
+                Descuento mínimo
+              </label>
 
-            <select
-              id="discount-filter"
-              value={
-                selectedDiscount
-              }
-              onChange={(event) =>
-                setSelectedDiscount(
-                  event.target.value
-                )
-              }
-              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 font-proxima text-sm font-bold text-zinc-900 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
-            >
-              <option value="">
-                Todos los descuentos
-              </option>
+              <span className="rounded-lg bg-zinc-950 px-2.5 py-1 font-proxima text-sm font-bold text-white">
+                {visualDiscountValue >
+                0
+                  ? `${formatDiscount(
+                      visualDiscountValue
+                    )}% o más`
+                  : "Todos"}
+              </span>
+            </div>
 
-              {discountOptions.map(
-                (discount) => (
-                  <option
-                    key={discount}
-                    value={discount}
-                  >
-                    {discount}% o más
-                  </option>
-                )
-              )}
-            </select>
+            {maxDiscount > 0 ? (
+              <div className="px-1">
+                <div className="relative">
+
+                  <input
+                    id="discount-filter"
+                    type="range"
+                    min="0"
+                    max={
+                      maxDiscount
+                    }
+                    step="0.1"
+                    value={
+                      visualDiscountValue
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      handleDiscountChange(
+                        Number(
+                          event
+                            .target
+                            .value
+                        )
+                      )
+                    }
+                    className="relative z-10 h-2 w-full cursor-pointer appearance-none rounded-full bg-zinc-200 accent-zinc-950"
+                  />
+                </div>
+
+                {/* Solo extremos */}
+                <div className="mt-2 flex justify-between font-proxima text-xs font-bold text-zinc-400">
+                  <span>0%</span>
+
+                  <span>
+                    {formatDiscount(
+                      maxDiscount
+                    )}
+                    %
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="font-proxima text-xs font-bold text-zinc-400">
+                No hay descuentos disponibles
+                con los filtros actuales.
+              </p>
+            )}
           </div>
 
+          {/* Precio */}
           <div className="mb-3">
             <p className="font-proxima text-sm font-bold text-zinc-900">
               Filtrar por precio

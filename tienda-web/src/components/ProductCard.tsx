@@ -46,6 +46,31 @@ export default function ProductCard({
     product.meliDiscountedPrice ??
     product.meliPrice;
 
+  /*
+   * Descuento total respecto al precio original
+   * de MercadoLibre.
+   *
+   * Ejemplo:
+   * ML original: $100.000
+   * ML con descuento: $80.000
+   * Precio web: $60.000
+   *
+   * Descuento total = 40%
+   */
+  const totalDiscountPercent =
+    product.meliPrice > 0
+      ? ((product.meliPrice - product.webPrice) /
+          product.meliPrice) *
+        100
+      : 0;
+
+  const formattedTotalDiscount =
+    Number.isInteger(totalDiscountPercent)
+      ? totalDiscountPercent.toString()
+      : totalDiscountPercent
+          .toFixed(1)
+          .replace(/\.0$/, "");
+
   const productUrl =
     getProductUrl(product);
 
@@ -67,7 +92,7 @@ export default function ProductCard({
 
           {hasDiscount && (
             <span className="absolute right-4 top-4 rounded-full bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white shadow-sm">
-              -{product.discountPercent}%
+              -{formattedTotalDiscount}%
             </span>
           )}
         </div>
