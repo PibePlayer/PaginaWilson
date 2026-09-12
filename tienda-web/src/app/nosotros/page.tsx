@@ -34,7 +34,6 @@ const uses = [
 export default function NosotrosPage() {
   return (
     <main className="min-h-screen bg-zinc-100 text-zinc-950">
-
       {/* Hero */}
       <section className="mx-auto max-w-7xl px-6 pb-16 pt-32">
         <div className="max-w-3xl">
@@ -220,12 +219,21 @@ export default function NosotrosPage() {
               </p>
             </div>
 
-            <Link
-              href="/productos"
-              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 font-proxima text-sm font-bold text-white transition hover:bg-emerald-700 active:scale-[0.98]"
-            >
-              Ver productos
-            </Link>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/productos"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 font-proxima text-sm font-bold text-white transition hover:bg-emerald-700 active:scale-[0.98]"
+              >
+                Ver productos
+              </Link>
+
+              <Link
+                href="/contacto"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-5 py-3 font-proxima text-sm font-bold text-white transition hover:border-zinc-600 hover:bg-zinc-800 active:scale-[0.98]"
+              >
+                Contactanos
+              </Link>
+            </div>
           </div>
         </div>
       </section>

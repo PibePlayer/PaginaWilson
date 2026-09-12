@@ -5,15 +5,25 @@ const DEFAULT_DISCOUNT_PERCENT = 10;
 export async function getMeliDiscountPercent(
   db: Db
 ): Promise<number> {
+  const start = performance.now();
+
   const settings = await db.collection("settings").findOne({
     key: "store",
   });
+
+  console.log(
+    `[SETTINGS] findOne: ${(
+      performance.now() - start
+    ).toFixed(1)} ms`
+  );
 
   if (!settings) {
     return DEFAULT_DISCOUNT_PERCENT;
   }
 
-  const discount = Number(settings.meliDiscountPercent);
+  const discount = Number(
+    settings.meliDiscountPercent
+  );
 
   if (
     !Number.isFinite(discount) ||

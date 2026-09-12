@@ -82,33 +82,50 @@ export default function Footer() {
             </nav>
           </div>
 
-          {/* WhatsApp */}
+          {/* Contacto */}
           <div>
             <h3 className="font-proxima text-sm font-bold uppercase tracking-wide text-white">
               ¿Necesitás ayuda?
             </h3>
 
             <p className="mt-4 font-proxima text-sm leading-6 text-zinc-400">
-              Estamos para ayudarte. Consultanos por WhatsApp.
+              Estamos para ayudarte. Consultanos por WhatsApp o seguinos en
+              Instagram.
             </p>
 
-            {process.env.NEXT_PUBLIC_WHATSAPP_PHONE && (
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              {/* WhatsApp */}
+              {process.env.NEXT_PUBLIC_WHATSAPP_PHONE && (
+                <a
+                  href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_PHONE}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center rounded-xl bg-green-500 h-10 w-10 font-proxima text-sm font-bold text-white transition hover:bg-green-600"
+                >
+                  <img
+                    src="/whatsapp.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className="h-5 w-5 object-contain"
+                  />
+                </a>
+              )}
+
+              {/* Instagram */}
               <a
-                href={`https://wa.me/${process.env.NEXT_PUBLIC_WHATSAPP_PHONE}`}
+                href="https://www.instagram.com/soguenote/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-4 py-2.5 font-proxima text-sm font-bold text-white transition hover:bg-green-600"
+                aria-label="Seguinos en Instagram"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 transition hover:border-zinc-500 hover:bg-zinc-800"
               >
                 <img
-                  src="/whatsapp.svg"
-                  alt=""
-                  aria-hidden="true"
-                  className="h-5 w-5"
+                  src="/instagram.png"
+                  alt="Instagram"
+                  className="h-5 w-5 object-contain"
                 />
-
-                WhatsApp
               </a>
-            )}
+            </div>
           </div>
         </div>
 
@@ -118,18 +135,18 @@ export default function Footer() {
             <strong className="font-bold text-zinc-400">
               IMPORTANTE:
             </strong>{" "}
-            Todas las imágenes de los productos son sólo a modo
-            ilustrativo y pueden diferir del artículo en stock. Los
-            precios indicados tienen IVA incluido y pueden sufrir
-            variaciones sin previo aviso. Disponibilidad sujeta a
-            stock.
+            Todas las imágenes de los productos son sólo a modo ilustrativo y
+            pueden diferir del artículo en stock. Los precios indicados tienen
+            IVA incluido y pueden sufrir variaciones sin previo aviso.
+            Disponibilidad sujeta a stock.
           </p>
         </div>
 
         {/* Copyright */}
         <div className="mt-6 flex flex-col gap-2 border-t border-zinc-800 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-proxima text-xs text-zinc-500">
-            © {new Date().getFullYear()} {STORE_NAME}. Todos los derechos reservados.
+            © {new Date().getFullYear()} {STORE_NAME}. Todos los derechos
+            reservados.
           </p>
 
           <p className="font-proxima text-xs text-zinc-600">

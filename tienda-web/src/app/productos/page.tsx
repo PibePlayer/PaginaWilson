@@ -1,6 +1,10 @@
 import { withDatabase } from "@/lib/db";
 import { getMeliDiscountPercent } from "@/lib/settings";
 import { calculateWebPrice } from "@/lib/pricing";
+import {
+  getCachedCatalogDiscount,
+  getCachedCatalogProducts,
+} from "@/lib/catalog-cache";
 
 import type { Product } from "@/types/product";
 import type { Category } from "@/types/category";
@@ -19,39 +23,392 @@ interface ProductsPageProps {
   }>;
 }
 
-export default async function ProductsPage({
-  searchParams,
-}: ProductsPageProps) {
-  const params = await searchParams;
+interface FormattedProduct {
+  meliId: string;
+  title: string;
+  meliPrice: number;
+  meliDiscountedPrice?: number;
+  currencyId: string;
+  availableQuantity: number;
+  thumbnail: string;
+  permalink: string;
+  status: string;
+  visible: boolean;
+  featured: boolean;
+  categoryId: string;
+  updatedAt: string;
+  webPrice: number;
+  discountPercent: number;
+}
 
-  const search =
-    params.search?.trim() || "";
+interface CatalogResult {
+  formattedProducts: FormattedProduct[];
+  formattedCategories: {
+    categoryId: string;
+    name: string;
+  }[];
+  discountOptions: number[];
+  total: number;
+}
 
-  const categoryId =
-    params.categoryId || "all";
+function formatProduct(
+  product: Product,
+  globalDiscountPercent: number
+): FormattedProduct {
+  const currentMeliPrice =
+    product.meliDiscountedPrice ??
+    product.meliPrice;
 
-  const minPrice =
-    params.minPrice || "";
+  const effectiveDiscountPercent =
+    product.discountPercent ??
+    globalDiscountPercent;
 
-  const maxPrice =
-    params.maxPrice || "";
+  const webPrice = calculateWebPrice(
+    currentMeliPrice,
+    effectiveDiscountPercent
+  );
 
-  const discount =
-    params.discount || "";
+  /*
+   * Descuento total respecto al precio
+   * original de MercadoLibre.
+   */
+  const totalDiscountPercent =
+    product.meliPrice > 0
+      ? ((product.meliPrice - webPrice) /
+          product.meliPrice) *
+        100
+      : 0;
 
-  const {
+  const roundedTotalDiscount = Number(
+    totalDiscountPercent.toFixed(1)
+  );
+
+  return {
+    meliId: product.meliId,
+
+    title: product.title,
+
+    meliPrice: product.meliPrice,
+
+    meliDiscountedPrice:
+      product.meliDiscountedPrice,
+
+    currencyId: product.currencyId,
+
+    availableQuantity:
+      product.availableQuantity,
+
+    thumbnail: product.thumbnail,
+
+    permalink: product.permalink,
+
+    status: product.status,
+
+    visible: product.visible,
+
+    featured: product.featured,
+
+    categoryId: product.categoryId,
+
+    updatedAt:
+      product.updatedAt instanceof Date
+        ? product.updatedAt.toISOString()
+        : String(product.updatedAt),
+
+    webPrice,
+
+    /*
+     * ProductCard utiliza este campo para
+     * mostrar el descuento total.
+     */
+    discountPercent:
+      roundedTotalDiscount,
+  };
+}
+
+async function getCatalogFromCache(
+  search: string,
+  categoryId: string,
+  minPrice: string,
+  maxPrice: string,
+  discount: string
+): Promise<CatalogResult | null> {
+  const [
+    cachedProducts,
+    globalDiscountPercent,
+  ] = await Promise.all([
+    getCachedCatalogProducts(),
+    getCachedCatalogDiscount(),
+  ]);
+
+  /*
+   * Si falta cualquiera de los dos valores,
+   * usamos Mongo como fallback.
+   */
+  if (
+    cachedProducts === null ||
+    globalDiscountPercent === null
+  ) {
+    console.log(
+      "[PRODUCTS] Cache incompleto, usando Mongo fallback"
+    );
+
+    return null;
+  }
+
+  console.log(
+    `[PRODUCTS] Usando catálogo KV (${cachedProducts.length} productos)`
+  );
+
+  const minPriceNumber = Number(minPrice);
+  const maxPriceNumber = Number(maxPrice);
+  const discountNumber = Number(discount);
+
+  const hasMinPrice =
+    minPrice !== "" &&
+    Number.isFinite(minPriceNumber);
+
+  const hasMaxPrice =
+    maxPrice !== "" &&
+    Number.isFinite(maxPriceNumber);
+
+  const hasDiscountFilter =
+    discount !== "" &&
+    Number.isFinite(discountNumber);
+
+  /*
+   * Primero aplicamos búsqueda + categoría.
+   */
+  const baseProducts =
+    cachedProducts.filter((product) => {
+      if (!product.visible) {
+        return false;
+      }
+
+      if (
+        search &&
+        !product.title
+          .toLowerCase()
+          .includes(search.toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (
+        categoryId !== "all" &&
+        product.categoryId !== categoryId
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+  /*
+   * Calculamos precios y descuentos sobre los
+   * productos que pasaron los filtros base.
+   */
+  const productsWithCalculatedValues =
+    baseProducts.map((product) => {
+      const currentMeliPrice =
+        product.meliDiscountedPrice ??
+        product.meliPrice;
+
+      const effectiveDiscountPercent =
+        product.discountPercent ??
+        globalDiscountPercent;
+
+      const webPrice =
+        calculateWebPrice(
+          currentMeliPrice,
+          effectiveDiscountPercent
+        );
+
+      const totalDiscountPercent =
+        product.meliPrice > 0
+          ? ((product.meliPrice -
+              webPrice) /
+              product.meliPrice) *
+            100
+          : 0;
+
+      const roundedTotalDiscount =
+        Number(
+          totalDiscountPercent.toFixed(1)
+        );
+
+      return {
+        product,
+        webPrice,
+        totalDiscountPercent:
+          roundedTotalDiscount,
+      };
+    });
+
+  /*
+   * Precio web.
+   */
+  const priceFilteredProducts =
+    productsWithCalculatedValues.filter(
+      ({
+        webPrice,
+      }) => {
+        if (
+          hasMinPrice &&
+          webPrice < minPriceNumber
+        ) {
+          return false;
+        }
+
+        if (
+          hasMaxPrice &&
+          webPrice > maxPriceNumber
+        ) {
+          return false;
+        }
+
+        return true;
+      }
+    );
+
+  /*
+   * Opciones de descuento:
+   *
+   * búsqueda + categoría + precio,
+   * ignorando el descuento seleccionado.
+   */
+  const discountOptions = Array.from(
+    new Set(
+      priceFilteredProducts
+        .map(
+          ({
+            totalDiscountPercent,
+          }) => totalDiscountPercent
+        )
+        .filter(
+          (value) =>
+            Number.isFinite(value) &&
+            value > 0
+        )
+    )
+  ).sort((a, b) => a - b);
+
+  /*
+   * Productos finales:
+   * búsqueda + categoría + precio +
+   * descuento seleccionado.
+   */
+  const finalProducts =
+    hasDiscountFilter
+      ? priceFilteredProducts.filter(
+          ({
+            totalDiscountPercent,
+          }) =>
+            totalDiscountPercent >=
+            discountNumber
+        )
+      : priceFilteredProducts;
+
+  /*
+   * Mismo orden que Mongo:
+   * title ascendente.
+   */
+  finalProducts.sort((a, b) =>
+    a.product.title.localeCompare(
+      b.product.title
+    )
+  );
+
+  const total = finalProducts.length;
+
+  /*
+   * La página inicial siempre toma los
+   * primeros 12 productos.
+   */
+  const formattedProducts =
+    finalProducts
+      .slice(0, PAGE_SIZE)
+      .map(
+        ({
+          product,
+        }) =>
+          formatProduct(
+            product,
+            globalDiscountPercent
+          )
+      );
+
+  /*
+   * Las categorías salen del mismo catálogo KV.
+   *
+   * Usamos todos los productos visibles,
+   * no solamente los resultados actuales,
+   * igual que la consulta anterior a
+   * la colección "categories".
+   */
+  const categoriesMap = new Map<
+    string,
+    string
+  >();
+
+  for (const product of cachedProducts) {
+    if (
+      product.visible &&
+      product.categoryId &&
+      product.categoryName
+    ) {
+      categoriesMap.set(
+        product.categoryId,
+        product.categoryName
+      );
+    }
+  }
+
+  const formattedCategories =
+    Array.from(
+      categoriesMap.entries()
+    )
+      .map(
+        ([
+          categoryId,
+          name,
+        ]) => ({
+          categoryId,
+          name,
+        })
+      )
+      .sort((a, b) =>
+        a.name.localeCompare(
+          b.name
+        )
+      );
+
+  return {
     formattedProducts,
     formattedCategories,
     discountOptions,
     total,
-  } = await withDatabase(async (db) => {
+  };
+}
+
+async function getCatalogFromMongo(
+  search: string,
+  categoryId: string,
+  minPrice: string,
+  maxPrice: string,
+  discount: string
+): Promise<CatalogResult> {
+  return withDatabase(async (db) => {
     const globalDiscountPercent =
       await getMeliDiscountPercent(db);
 
     const productsCollection =
       db.collection<Product>("products");
 
-    const filter: Record<string, unknown> = {
+    const filter: Record<
+      string,
+      unknown
+    > = {
       visible: true,
     };
 
@@ -77,18 +434,26 @@ export default async function ProductsPage({
 
     const hasMinPrice =
       minPrice !== "" &&
-      Number.isFinite(minPriceNumber);
+      Number.isFinite(
+        minPriceNumber
+      );
 
     const hasMaxPrice =
       maxPrice !== "" &&
-      Number.isFinite(maxPriceNumber);
+      Number.isFinite(
+        maxPriceNumber
+      );
 
     const hasDiscountFilter =
       discount !== "" &&
-      Number.isFinite(discountNumber);
+      Number.isFinite(
+        discountNumber
+      );
 
-    const priceFilter: Record<string, number> =
-      {};
+    const priceFilter: Record<
+      string,
+      number
+    > = {};
 
     if (hasMinPrice) {
       priceFilter.$gte =
@@ -111,85 +476,89 @@ export default async function ProductsPage({
      * - precio web
      * - descuento total real
      */
-    const basePipeline: Record<string, unknown>[] =
-      [
-        {
-          $match: filter,
-        },
-        {
-          $addFields: {
-            effectiveMeliPrice: {
-              $ifNull: [
-                "$meliDiscountedPrice",
-                "$meliPrice",
-              ],
-            },
+    const basePipeline: Record<
+      string,
+      unknown
+    >[] = [
+      {
+        $match: filter,
+      },
+      {
+        $addFields: {
+          effectiveMeliPrice: {
+            $ifNull: [
+              "$meliDiscountedPrice",
+              "$meliPrice",
+            ],
+          },
 
-            effectiveDiscountPercent: {
-              $ifNull: [
-                "$discountPercent",
-                globalDiscountPercent,
-              ],
-            },
+          effectiveDiscountPercent: {
+            $ifNull: [
+              "$discountPercent",
+              globalDiscountPercent,
+            ],
           },
         },
-        {
-          $addFields: {
-            webPrice: {
-              $round: [
-                {
-                  $multiply: [
-                    "$effectiveMeliPrice",
-                    {
-                      $subtract: [
-                        1,
-                        {
-                          $divide: [
-                            "$effectiveDiscountPercent",
-                            100,
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-                0,
-              ],
-            },
+      },
+      {
+        $addFields: {
+          webPrice: {
+            $round: [
+              {
+                $multiply: [
+                  "$effectiveMeliPrice",
+                  {
+                    $subtract: [
+                      1,
+                      {
+                        $divide: [
+                          "$effectiveDiscountPercent",
+                          100,
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              0,
+            ],
           },
         },
-        {
-          $addFields: {
-            totalDiscountPercent: {
-              $round: [
-                {
-                  $multiply: [
-                    {
-                      $subtract: [
-                        1,
-                        {
-                          $divide: [
-                            "$webPrice",
-                            "$meliPrice",
-                          ],
-                        },
-                      ],
-                    },
-                    100,
-                  ],
-                },
-                1,
-              ],
-            },
+      },
+      {
+        $addFields: {
+          totalDiscountPercent: {
+            $round: [
+              {
+                $multiply: [
+                  {
+                    $subtract: [
+                      1,
+                      {
+                        $divide: [
+                          "$webPrice",
+                          "$meliPrice",
+                        ],
+                      },
+                    ],
+                  },
+                  100,
+                ],
+              },
+              1,
+            ],
           },
         },
-      ];
+      },
+    ];
 
     /*
-     * El precio sí forma parte de los filtros.
+     * El precio sí forma parte
+     * de los filtros.
      */
     if (
-      Object.keys(priceFilter).length > 0
+      Object.keys(priceFilter)
+        .length > 0
     ) {
       basePipeline.push({
         $match: {
@@ -203,10 +572,12 @@ export default async function ProductsPage({
      * primero búsqueda + categoría + precio,
      * después descuento total mínimo.
      */
-    const productsPipeline: Record<string, unknown>[] =
-      [
-        ...basePipeline,
-      ];
+    const productsPipeline: Record<
+      string,
+      unknown
+    >[] = [
+      ...basePipeline,
+    ];
 
     if (hasDiscountFilter) {
       productsPipeline.push({
@@ -232,13 +603,8 @@ export default async function ProductsPage({
     /*
      * Opciones de descuento:
      *
-     * Se calculan sobre búsqueda + categoría +
-     * precio, ignorando el descuento seleccionado.
-     *
-     * IMPORTANTE:
-     * Ahora representan el DESCUENTO TOTAL REAL,
-     * es decir, la diferencia entre el precio original
-     * de MercadoLibre y el precio final de SOGUE.
+     * búsqueda + categoría + precio,
+     * ignorando el descuento seleccionado.
      */
     const discountOptionsPipeline: Record<
       string,
@@ -254,7 +620,8 @@ export default async function ProductsPage({
       },
       {
         $group: {
-          _id: "$totalDiscountPercent",
+          _id:
+            "$totalDiscountPercent",
         },
       },
       {
@@ -267,10 +634,12 @@ export default async function ProductsPage({
     /*
      * Conteo total.
      */
-    const countPipeline: Record<string, unknown>[] =
-      [
-        ...basePipeline,
-      ];
+    const countPipeline: Record<
+      string,
+      unknown
+    >[] = [
+      ...basePipeline,
+    ];
 
     if (hasDiscountFilter) {
       countPipeline.push({
@@ -301,11 +670,15 @@ export default async function ProductsPage({
       productsCollection
         .aggregate<{
           total: number;
-        }>(countPipeline)
+        }>(
+          countPipeline
+        )
         .toArray(),
 
       db
-        .collection<Category>("categories")
+        .collection<Category>(
+          "categories"
+        )
         .find({})
         .sort({ name: 1 })
         .toArray(),
@@ -313,16 +686,21 @@ export default async function ProductsPage({
       productsCollection
         .aggregate<{
           _id: number;
-        }>(discountOptionsPipeline)
+        }>(
+          discountOptionsPipeline
+        )
         .toArray(),
     ]);
 
     const total =
-      countResult[0]?.total ?? 0;
+      countResult[0]?.total ??
+      0;
 
     const availableDiscountOptions =
       discountResults
-        .map((item) => item._id)
+        .map(
+          (item) => item._id
+        )
         .filter(
           (value) =>
             Number.isFinite(value) &&
@@ -331,91 +709,13 @@ export default async function ProductsPage({
 
     return {
       formattedProducts:
-        products.map((product) => {
-          const currentMeliPrice =
-            product.meliDiscountedPrice ??
-            product.meliPrice;
-
-          const effectiveDiscountPercent =
-            product.discountPercent ??
-            globalDiscountPercent;
-
-          const webPrice =
-            calculateWebPrice(
-              currentMeliPrice,
-              effectiveDiscountPercent
-            );
-
-          /*
-           * Descuento total respecto al precio
-           * original de MercadoLibre.
-           *
-           * Se calcula usando el mismo precio web
-           * que se muestra en la card.
-           */
-          const totalDiscountPercent =
-            product.meliPrice > 0
-              ? ((product.meliPrice -
-                  webPrice) /
-                  product.meliPrice) *
-                100
-              : 0;
-
-          const roundedTotalDiscount =
-            Number(
-              totalDiscountPercent.toFixed(1)
-            );
-
-          return {
-            meliId:
-              product.meliId,
-
-            title:
-              product.title,
-
-            meliPrice:
-              product.meliPrice,
-
-            meliDiscountedPrice:
-              product.meliDiscountedPrice,
-
-            currencyId:
-              product.currencyId,
-
-            availableQuantity:
-              product.availableQuantity,
-
-            thumbnail:
-              product.thumbnail,
-
-            permalink:
-              product.permalink,
-
-            status:
-              product.status,
-
-            visible:
-              product.visible,
-
-            featured:
-              product.featured,
-
-            categoryId:
-              product.categoryId,
-
-            updatedAt:
-              product.updatedAt.toISOString(),
-
-            webPrice,
-
-            /*
-             * ProductCard utiliza este campo para
-             * mostrar el descuento total.
-             */
-            discountPercent:
-              roundedTotalDiscount,
-          };
-        }),
+        products.map(
+          (product) =>
+            formatProduct(
+              product,
+              globalDiscountPercent
+            )
+        ),
 
       formattedCategories:
         categories.map(
@@ -434,6 +734,59 @@ export default async function ProductsPage({
       total,
     };
   });
+}
+
+export default async function ProductsPage({
+  searchParams,
+}: ProductsPageProps) {
+  const params =
+    await searchParams;
+
+  const search =
+    params.search?.trim() || "";
+
+  const categoryId =
+    params.categoryId || "all";
+
+  const minPrice =
+    params.minPrice || "";
+
+  const maxPrice =
+    params.maxPrice || "";
+
+  const discount =
+    params.discount || "";
+
+  /*
+   * Primero intentamos KV.
+   *
+   * Si el cache no existe o está incompleto,
+   * usamos exactamente el flujo anterior
+   * con Mongo.
+   */
+  const cachedResult =
+    await getCatalogFromCache(
+      search,
+      categoryId,
+      minPrice,
+      maxPrice,
+      discount
+    );
+
+  const {
+    formattedProducts,
+    formattedCategories,
+    discountOptions,
+    total,
+  } =
+    cachedResult ??
+    (await getCatalogFromMongo(
+      search,
+      categoryId,
+      minPrice,
+      maxPrice,
+      discount
+    ));
 
   return (
     <main className="min-h-screen bg-zinc-100 pt-24">
@@ -449,8 +802,12 @@ export default async function ProductsPage({
           discountOptions={
             discountOptions
           }
-          initialTotal={total}
-          initialSearch={search}
+          initialTotal={
+            total
+          }
+          initialSearch={
+            search
+          }
           initialCategoryId={
             categoryId
           }

@@ -3,119 +3,184 @@ import ProductCard from "@/components/ProductCard";
 import { withDatabase } from "@/lib/db";
 import { getMeliDiscountPercent } from "@/lib/settings";
 import { calculateWebPrice } from "@/lib/pricing";
+import {
+  getCachedCatalogDiscount,
+  getCachedCatalogProducts,
+} from "@/lib/catalog-cache";
 
 import type { Product } from "@/types/product";
 
+type HomeProduct = Omit<Product, "updatedAt"> & {
+  updatedAt: string;
+  webPrice: number;
+  discountPercent: number;
+};
+
 export default async function Home() {
-  const featuredProducts =
-    await withDatabase(async (db) => {
-      const discountPercent =
-        await getMeliDiscountPercent(db);
+  const homeStart = performance.now();
 
-      const products =
-        await db
-          .collection<Product>("products")
-          .find({
-            visible: true,
-            featured: true,
-          })
-          .toArray();
+  console.log("[HOME] ===== INICIO =====");
 
-      products.sort((a, b) => {
-        const orderA =
-          a.featuredOrder ??
-          Number.MAX_SAFE_INTEGER;
+  let featuredProducts: HomeProduct[];
 
-        const orderB =
-          b.featuredOrder ??
-          Number.MAX_SAFE_INTEGER;
+  const [
+    cachedProducts,
+    cachedDiscount,
+  ] = await Promise.all([
+    getCachedCatalogProducts(),
+    getCachedCatalogDiscount(),
+  ]);
 
-        if (orderA !== orderB) {
-          return orderA - orderB;
-        }
+  if (
+    cachedProducts !== null &&
+    cachedDiscount !== null
+  ) {
+    console.log(
+      `[HOME] Usando catálogo KV (${cachedProducts.length} productos)`
+    );
 
-        return (
-          b.updatedAt.getTime() -
-          a.updatedAt.getTime()
-        );
-      });
+    const products =
+      cachedProducts
+        .filter(
+          (product) =>
+            product.visible &&
+            product.featured
+        )
+        .sort((a, b) => {
+          const orderA =
+            a.featuredOrder ??
+            Number.MAX_SAFE_INTEGER;
 
-      const featuredProducts =
-        products.slice(0, 8);
+          const orderB =
+            b.featuredOrder ??
+            Number.MAX_SAFE_INTEGER;
 
-      return products.map((product) => {
-        /*
-         * Precio efectivo actual de ML.
-         */
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+
+          return (
+            new Date(b.updatedAt).getTime() -
+            new Date(a.updatedAt).getTime()
+          );
+        })
+        .slice(0, 8);
+
+    featuredProducts =
+      products.map((product) => {
         const currentMeliPrice =
           product.meliDiscountedPrice ??
           product.meliPrice;
 
-        /*
-         * El descuento individual tiene
-         * prioridad sobre el global.
-         */
         const effectiveDiscountPercent =
           product.discountPercent ??
-          discountPercent;
+          cachedDiscount;
 
         return {
-          meliId:
-            product.meliId,
-
-          title:
-            product.title,
-
-          meliPrice:
-            product.meliPrice,
-
-          meliDiscountedPrice:
-            product.meliDiscountedPrice,
-
-          currencyId:
-            product.currencyId,
-
-          availableQuantity:
-            product.availableQuantity,
-
-          thumbnail:
-            product.thumbnail,
-
-          permalink:
-            product.permalink,
-
-          status:
-            product.status,
-
-          visible:
-            product.visible,
-
-          featured:
-            product.featured,
-
-          categoryId:
-            product.categoryId,
+          ...product,
 
           updatedAt:
-            product.updatedAt.toISOString(),
+            new Date(
+              product.updatedAt
+            ).toISOString(),
 
-          /*
-           * Precio final SOGUE.
-           */
           webPrice:
             calculateWebPrice(
               currentMeliPrice,
               effectiveDiscountPercent
             ),
 
-          /*
-           * Descuento realmente aplicado.
-           */
           discountPercent:
             effectiveDiscountPercent,
         };
       });
-    });
+  } else {
+    console.log(
+      "[HOME] KV no disponible. Usando MongoDB."
+    );
+
+    featuredProducts =
+      await withDatabase(async (db) => {
+        const productsFilter = {
+          visible: true,
+          featured: true,
+        };
+
+        const [
+          discountPercent,
+          products,
+        ] = await Promise.all([
+          getMeliDiscountPercent(db),
+
+          db
+            .collection<Product>("products")
+            .find(productsFilter)
+            .toArray(),
+        ]);
+
+        products.sort((a, b) => {
+          const orderA =
+            a.featuredOrder ??
+            Number.MAX_SAFE_INTEGER;
+
+          const orderB =
+            b.featuredOrder ??
+            Number.MAX_SAFE_INTEGER;
+
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+
+          return (
+            b.updatedAt.getTime() -
+            a.updatedAt.getTime()
+          );
+        });
+
+        const selectedProducts =
+          products.slice(0, 8);
+
+        return selectedProducts.map(
+          (product) => {
+            const currentMeliPrice =
+              product.meliDiscountedPrice ??
+              product.meliPrice;
+
+            const effectiveDiscountPercent =
+              product.discountPercent ??
+              discountPercent;
+
+            return {
+              ...product,
+
+              updatedAt:
+                product.updatedAt.toISOString(),
+
+              webPrice:
+                calculateWebPrice(
+                  currentMeliPrice,
+                  effectiveDiscountPercent
+                ),
+
+              discountPercent:
+                effectiveDiscountPercent,
+            };
+          }
+        );
+      });
+  }
+
+  console.log(
+    `[HOME] productos seleccionados: ${featuredProducts.length}`
+  );
+
+  console.log(
+    `[HOME] TOTAL: ${(
+      performance.now() - homeStart
+    ).toFixed(1)} ms`
+  );
+
+  console.log("[HOME] ===== FIN =====");
 
   return (
     <main className="min-h-screen bg-zinc-100 text-zinc-950">

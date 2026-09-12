@@ -6,13 +6,26 @@ import {
 
 const DB_NAME = "wilson";
 
-let pooledClientPromise: Promise<ReturnType<typeof createMongoClient>> | null =
-  null;
+let pooledClientPromise:
+  Promise<ReturnType<typeof createMongoClient>> | null = null;
 
 async function getPooledClient() {
+  const start = performance.now();
+
   if (!pooledClientPromise) {
     const client = createMongoClient();
-    pooledClientPromise = client.connect().then(() => client);
+
+    console.log("[DB] creando conexión pooled...");
+
+    pooledClientPromise = client.connect().then(() => {
+      console.log(
+        `[DB] conexión pooled establecida en ${(
+          performance.now() - start
+        ).toFixed(1)} ms`
+      );
+
+      return client;
+    });
   }
 
   try {
@@ -26,18 +39,84 @@ async function getPooledClient() {
 export async function withDatabase<T>(
   operation: (db: Db) => Promise<T>
 ): Promise<T> {
-  if (getMongoConnectionMode() === "pooled") {
+  const totalStart = performance.now();
+  const mode = getMongoConnectionMode();
+
+  console.log(`[DB] withDatabase mode=${mode}`);
+
+  if (mode === "pooled") {
+    const connectStart = performance.now();
+
     const client = await getPooledClient();
-    return operation(client.db(DB_NAME));
+
+    console.log(
+      `[DB] obtener cliente pooled: ${(
+        performance.now() - connectStart
+      ).toFixed(1)} ms`
+    );
+
+    const operationStart = performance.now();
+
+    const result = await operation(
+      client.db(DB_NAME)
+    );
+
+    console.log(
+      `[DB] operation: ${(
+        performance.now() - operationStart
+      ).toFixed(1)} ms`
+    );
+
+    console.log(
+      `[DB] TOTAL withDatabase: ${(
+        performance.now() - totalStart
+      ).toFixed(1)} ms`
+    );
+
+    return result;
   }
 
   const client = createMongoClient();
 
+  const connectStart = performance.now();
+
+  await client.connect();
+
+  console.log(
+    `[DB] connect: ${(
+      performance.now() - connectStart
+    ).toFixed(1)} ms`
+  );
+
   try {
-    await client.connect();
-    return await operation(client.db(DB_NAME));
+    const operationStart = performance.now();
+
+    const result = await operation(
+      client.db(DB_NAME)
+    );
+
+    console.log(
+      `[DB] operation: ${(
+        performance.now() - operationStart
+      ).toFixed(1)} ms`
+    );
+
+    return result;
   } finally {
-    // En Workers el socket pertenece a esta solicitud y no puede reutilizarse.
+    const closeStart = performance.now();
+
     await client.close(true);
+
+    console.log(
+      `[DB] close: ${(
+        performance.now() - closeStart
+      ).toFixed(1)} ms`
+    );
+
+    console.log(
+      `[DB] TOTAL withDatabase: ${(
+        performance.now() - totalStart
+      ).toFixed(1)} ms`
+    );
   }
 }

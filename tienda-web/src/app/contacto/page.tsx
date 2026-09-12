@@ -9,14 +9,11 @@ export default function ContactoPage() {
     "Hola! Quisiera hacer una consulta."
   );
 
-  const mapQuery = encodeURIComponent(
-    "Sogue Note"
-  );
+  const mapQuery = encodeURIComponent("Sogue Note");
 
   return (
     <main className="min-h-screen bg-zinc-50 pt-24">
       <div className="mx-auto max-w-7xl px-6 py-12">
-
         {/* Encabezado */}
         <div className="max-w-2xl">
           <p className="font-proxima text-sm font-bold uppercase tracking-widest text-emerald-600">
@@ -28,9 +25,9 @@ export default function ContactoPage() {
           </h1>
 
           <p className="mt-4 font-proxima text-base leading-7 text-zinc-600">
-            Podés contactarnos directamente por WhatsApp o
-            acercarte a nuestro local. También podés encontrarnos
-            en MercadoLibre como{" "}
+            Podés contactarnos directamente por WhatsApp, seguirnos en
+            Instagram o acercarte a nuestro local. También podés
+            encontrarnos en MercadoLibre como{" "}
             <strong className="font-bold text-zinc-900">
               SOGUENOTE
             </strong>
@@ -40,10 +37,8 @@ export default function ContactoPage() {
 
         {/* Contenido */}
         <div className="mt-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-
           {/* Información */}
           <div className="flex flex-col gap-6">
-
             {/* WhatsApp */}
             <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100">
@@ -81,6 +76,44 @@ export default function ContactoPage() {
                   Escribir por WhatsApp
                 </a>
               )}
+            </section>
+
+            {/* Instagram */}
+            <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100">
+                <img
+                  src="/instagram.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-7 w-7 object-contain"
+                />
+              </div>
+
+              <h2 className="mt-5 font-proxima text-xl font-bold text-zinc-950">
+                Seguinos en Instagram
+              </h2>
+
+              <p className="mt-2 font-proxima text-sm leading-6 text-zinc-600">
+                Seguinos para conocer nuestros productos, novedades
+                y publicaciones de SOGUENOTE.
+              </p>
+
+              <a
+                href="https://www.instagram.com/soguenote/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Seguinos en Instagram"
+                className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-3.5 font-proxima text-sm font-bold text-white transition hover:bg-zinc-800 active:scale-[0.98]"
+              >
+                <img
+                  src="/instagram.png"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-5 w-5 object-contain"
+                />
+
+                Ver Instagram
+              </a>
             </section>
 
             {/* Ubicación y horario */}

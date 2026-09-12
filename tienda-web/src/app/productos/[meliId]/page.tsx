@@ -7,6 +7,10 @@ import ProductGallery from "../../../components/ProductGallery";
 import { withDatabase } from "@/lib/db";
 import { calculateWebPrice } from "@/lib/pricing";
 import { getMeliDiscountPercent } from "@/lib/settings";
+import {
+  getCachedCatalogDiscount,
+  getCachedCatalogProducts,
+} from "@/lib/catalog-cache";
 import type {
   Product,
   ProductAttribute,
@@ -240,6 +244,25 @@ function getAvailability(
 async function getProduct(
   meliId: string
 ): Promise<Product | null> {
+  /*
+   * Primero buscamos en Cloudflare KV.
+   */
+  const cachedProducts =
+    await getCachedCatalogProducts();
+
+  if (cachedProducts !== null) {
+    return (
+      cachedProducts.find(
+        (product) =>
+          product.meliId === meliId &&
+          product.visible
+      ) ?? null
+    );
+  }
+
+  /*
+   * Fallback a MongoDB.
+   */
   return withDatabase(async (db) => {
     return db
       .collection<Product>("products")
@@ -341,10 +364,15 @@ export default async function ProductPage({
     notFound();
   }
 
-  const globalDiscount =
-    await withDatabase(async (db) =>
-      getMeliDiscountPercent(db)
-    );
+  let globalDiscount =
+    await getCachedCatalogDiscount();
+
+  if (globalDiscount === null) {
+    globalDiscount =
+      await withDatabase(async (db) =>
+        getMeliDiscountPercent(db)
+      );
+  }
 
   const discountPercent =
     product.discountPercent ??
