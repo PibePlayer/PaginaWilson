@@ -4,7 +4,11 @@ import {
   getMongoConnectionMode,
 } from "./mongodb";
 
-const DB_NAME = "wilson";
+const DB_NAME = process.env.MONGODB_DB_NAME;
+
+if (!DB_NAME) {
+  throw new Error("MONGODB_DB_NAME is not defined");
+}
 
 let pooledClientPromise:
   Promise<ReturnType<typeof createMongoClient>> | null = null;

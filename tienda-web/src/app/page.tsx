@@ -9,6 +9,7 @@ import {
 } from "@/lib/catalog-cache";
 
 import type { Product } from "@/types/product";
+import { STORE_LANDING_DESCRIPTION, STORE_LANDING_TITLE } from "@/lib/store-config";
 
 type HomeProduct = Omit<Product, "updatedAt"> & {
   updatedAt: string;
@@ -194,12 +195,11 @@ export default async function Home() {
           </p>
 
           <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-            Tecnología al mejor precio.
+            {STORE_LANDING_TITLE}
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-500">
-            Encontrá notebooks, smartwatches y tecnología seleccionada.
-            Consultá directamente por WhatsApp y obtené nuestro precio web.
+            {STORE_LANDING_DESCRIPTION}
           </p>
 
         </div>

@@ -9,9 +9,23 @@
     "lint": "eslint",
     "build:cloudflare": "opennextjs-cloudflare build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy": "npm run deploy:sogue",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "sync:kv": "tsx scripts/sync-catalog-kv.ts"
+    
+    "build:sogue": "dotenv -e .env.sogue -- opennextjs-cloudflare build",
+    "build:clickspro": "dotenv -e .env.clickspro -- opennextjs-cloudflare build",
+
+    "preview:sogue": "dotenv -e .env.sogue -- opennextjs-cloudflare build && dotenv -e .env.sogue -- opennextjs-cloudflare preview",
+    "preview:clickspro": "dotenv -e .env.clickspro -- opennextjs-cloudflare build && dotenv -e .env.clickspro -- opennextjs-cloudflare preview --env clickspro",
+    
+    "deploy:sogue": "dotenv -e .env.sogue -- opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:clickspro": "dotenv -e .env.clickspro -- opennextjs-cloudflare build && opennextjs-cloudflare deploy --env clickspro",
+
+    "sync:kv:sogue": "dotenv -e .env.sogue -- tsx scripts/sync-catalog-kv.ts",
+    "sync:kv:clickspro": "dotenv -e .env.clickspro -- tsx scripts/sync-catalog-kv.ts --env clickspro",
+
+    "sync:sogue": "dotenv -e .env.sogue -- tsx scripts/sync-store.ts",
+    "sync:clickspro": "dotenv -e .env.clickspro -- tsx scripts/sync-store.ts --env clickspro"
   },
   "dependencies": {
     "@microsoft/clarity": "^1.0.2",
@@ -27,6 +41,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
@@ -38,6 +53,7 @@
     "unrs-resolver@1.12.2": true,
     "esbuild@0.25.4": true,
     "esbuild@0.28.1": true,
-    "workerd@1.20260908.1": true
+    "workerd@1.20260908.1": true,
+    "esbuild@0.28.2": true
   }
 }

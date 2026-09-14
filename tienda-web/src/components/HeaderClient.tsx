@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { STORE_LOGO_ALT, STORE_LOGO_URL } from "@/lib/store-config";
 
 interface HeaderClientProps {
   desktopAction?: ReactNode;
@@ -119,8 +120,8 @@ export default function HeaderClient({
             aria-label="Sogue Note - Inicio"
           >
             <img
-              src="/SogueLogo.jpeg"
-              alt="Sogue Note"
+              src={STORE_LOGO_URL}
+              alt={STORE_LOGO_ALT}
               className="h-auto w-[115px] object-contain"
             />
           </Link>

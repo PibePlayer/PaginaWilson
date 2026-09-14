@@ -51,6 +51,44 @@ export default function AdminSync({
   const [category, setCategory] = useState(false);
   const [attributes, setAttributes] = useState(false);
 
+  const [meliStatus, setMeliStatus] = useState<
+    "loading" | "connected" | "expired" | "disconnected"
+    >("loading");
+
+  const loadMeliStatus = async () => {
+    try {
+      const response = await fetch(
+        "/api/admin/mercadolibre/status",
+        {
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "No se pudo consultar el estado de MercadoLibre."
+        );
+      }
+
+      const data = await response.json();
+
+      if (data.connected) {
+        setMeliStatus("connected");
+      } else if (data.expired) {
+        setMeliStatus("expired");
+      } else {
+        setMeliStatus("disconnected");
+      }
+    } catch (error) {
+      console.error(
+        "Error verificando MercadoLibre:",
+        error
+      );
+
+      setMeliStatus("disconnected");
+    }
+  };
+
   async function loadDescriptionStats() {
     try {
       const response = await fetch(
@@ -76,6 +114,7 @@ export default function AdminSync({
 
   useEffect(() => {
     loadDescriptionStats();
+    loadMeliStatus();
   }, []);
 
   function formatDate(value: string | null) {
@@ -276,9 +315,31 @@ export default function AdminSync({
             </p>
           </div>
 
-          <span className="rounded-full bg-green-50 px-3 py-1.5 font-proxima text-xs font-bold text-green-700">
-            Conectado
-          </span>
+          <div className="flex items-center gap-2">
+            {meliStatus === "loading" && (
+              <span className="rounded-full bg-zinc-100 px-3 py-1.5 font-proxima text-xs font-bold text-zinc-500">
+                Verificando...
+              </span>
+            )}
+
+            {meliStatus === "connected" && (
+              <span className="rounded-full bg-green-50 px-3 py-1.5 font-proxima text-xs font-bold text-green-700">
+                Conectado
+              </span>
+            )}
+
+            {meliStatus !== "connected" &&
+              meliStatus !== "loading" && (
+                <a
+                  href="/api/auth/mercadolibre"
+                  className="mt-4 inline-flex rounded-lg bg-yellow-400 px-4 py-2 font-proxima text-sm font-bold text-zinc-950 transition hover:bg-yellow-300"
+                >
+                  {meliStatus === "expired"
+                    ? "Reconectar MercadoLibre"
+                    : "Conectar MercadoLibre"}
+                </a>
+              )}
+          </div>
         </div>
 
         {/* Última sincronización */}

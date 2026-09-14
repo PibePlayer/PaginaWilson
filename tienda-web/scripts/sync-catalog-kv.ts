@@ -1,20 +1,22 @@
-import { loadEnvConfig } from "@next/env";
 import { execFileSync } from "node:child_process";
 import {
-  writeFileSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import path from "node:path";
-
-// Cargar variables de entorno de Next.js
-loadEnvConfig(process.cwd());
 
 import { createMongoClient } from "../src/lib/mongodb";
 import { getMeliDiscountPercent } from "../src/lib/settings";
 
 import type { Product } from "../src/types/product";
 
-const DB_NAME = "wilson";
+const DB_NAME = process.env.MONGODB_DB_NAME;
+
+if (!DB_NAME) {
+  throw new Error(
+    "MONGODB_DB_NAME no está definido"
+  );
+}
 
 const CATALOG_PRODUCTS_KEY =
   "catalog:products";
@@ -24,18 +26,104 @@ const CATALOG_DISCOUNT_KEY =
 
 const KV_BINDING = "CATALOG_CACHE";
 
-async function main() {
+/**
+ * Detecta si estamos ejecutando Wrangler contra
+ * un environment específico.
+ *
+ * Ejemplo:
+ *
+ * npm run sync:kv:sogue
+ * → environment por defecto (SOGUE)
+ *
+ * npm run sync:kv:clickspro
+ * → --env clickspro
+ */
+function getWranglerEnvArgs(): string[] {
+  const envIndex =
+    process.argv.indexOf("--env");
+
+  if (
+    envIndex !== -1 &&
+    process.argv[envIndex + 1]
+  ) {
+    return [
+      "--env",
+      process.argv[envIndex + 1],
+    ];
+  }
+
+  return [];
+}
+
+function getWranglerPath() {
+  return process.platform === "win32"
+    ? ".\\node_modules\\.bin\\wrangler.cmd"
+    : "./node_modules/.bin/wrangler";
+}
+
+function runWrangler(
+  args: string[]
+) {
+  const wrangler =
+    getWranglerPath();
+
+  const envArgs =
+    getWranglerEnvArgs();
+
+  execFileSync(
+    wrangler,
+    [
+      ...args,
+      ...envArgs,
+    ],
+    {
+      stdio: "inherit",
+      shell:
+        process.platform === "win32",
+    }
+  );
+}
+
+export async function syncCatalogKv() {
   const start = performance.now();
 
-  console.log("========================================");
+  console.log(
+    "========================================"
+  );
   console.log(
     "   SYNC CATÁLOGO → CLOUDFLARE KV"
   );
-  console.log("========================================");
+  console.log(
+    "========================================"
+  );
 
-  const client = createMongoClient();
+  const wranglerEnvArgs =
+    getWranglerEnvArgs();
+
+  if (wranglerEnvArgs.length > 0) {
+    console.log(
+      `[SYNC] Wrangler environment: ${wranglerEnvArgs[1]}`
+    );
+  } else {
+    console.log(
+      "[SYNC] Wrangler environment: default (SOGUE)"
+    );
+  }
+
+  console.log(
+    `[SYNC] MongoDB database: ${DB_NAME}`
+  );
+
+  const client =
+    createMongoClient();
 
   try {
+    /*
+     * ========================================
+     * MONGODB
+     * ========================================
+     */
+
     console.log(
       "[SYNC] Conectando a MongoDB..."
     );
@@ -47,11 +135,13 @@ async function main() {
 
     console.log(
       `[SYNC] MongoDB conectado en ${(
-        performance.now() - connectStart
+        performance.now() -
+        connectStart
       ).toFixed(1)} ms`
     );
 
-    const db = client.db(DB_NAME);
+    const db =
+      client.db(DB_NAME);
 
     console.log(
       "[SYNC] Obteniendo productos y descuento..."
@@ -81,7 +171,8 @@ async function main() {
 
     console.log(
       `[SYNC] MongoDB respondió en ${(
-        performance.now() - queryStart
+        performance.now() -
+        queryStart
       ).toFixed(1)} ms`
     );
 
@@ -92,6 +183,12 @@ async function main() {
     console.log(
       `[SYNC] Descuento global: ${discountPercent}%`
     );
+
+    /*
+     * ========================================
+     * SERIALIZACIÓN
+     * ========================================
+     */
 
     const serializedProducts =
       products.map((product) => ({
@@ -108,8 +205,9 @@ async function main() {
 
     console.log(
       `[SYNC] Tamaño catalog:products: ${(
-        Buffer.byteLength(productsJson) /
-        1024
+        Buffer.byteLength(
+          productsJson
+        ) / 1024
       ).toFixed(1)} KB`
     );
 
@@ -126,10 +224,11 @@ async function main() {
     const productsPutStart =
       performance.now();
 
-    const tempFile = path.join(
-      process.cwd(),
-      ".catalog-products-kv.json"
-    );
+    const tempFile =
+      path.join(
+        process.cwd(),
+        ".catalog-products-kv.json"
+      );
 
     writeFileSync(
       tempFile,
@@ -138,33 +237,21 @@ async function main() {
     );
 
     try {
-      const wrangler =
-        process.platform === "win32"
-          ? ".\\node_modules\\.bin\\wrangler.cmd"
-          : "./node_modules/.bin/wrangler";
-
-      execFileSync(
-        wrangler,
-        [
-          "kv",
-          "key",
-          "put",
-          CATALOG_PRODUCTS_KEY,
-          `--path=${tempFile}`,
-          `--binding=${KV_BINDING}`,
-          "--remote",
-        ],
-        {
-          stdio: "inherit",
-          shell:
-            process.platform === "win32",
-        }
-      );
+      runWrangler([
+        "kv",
+        "key",
+        "put",
+        CATALOG_PRODUCTS_KEY,
+        `--path=${tempFile}`,
+        `--binding=${KV_BINDING}`,
+        "--remote",
+      ]);
     } finally {
       try {
         unlinkSync(tempFile);
       } catch {
-        // El archivo puede no existir si Wrangler falló antes.
+        // El archivo puede no existir
+        // si Wrangler falló antes.
       }
     }
 
@@ -188,28 +275,15 @@ async function main() {
     const discountPutStart =
       performance.now();
 
-    const wrangler =
-      process.platform === "win32"
-        ? ".\\node_modules\\.bin\\wrangler.cmd"
-        : "./node_modules/.bin/wrangler";
-
-    execFileSync(
-      wrangler,
-      [
-        "kv",
-        "key",
-        "put",
-        CATALOG_DISCOUNT_KEY,
-        String(discountPercent),
-        `--binding=${KV_BINDING}`,
-        "--remote",
-      ],
-      {
-        stdio: "inherit",
-        shell:
-          process.platform === "win32",
-      }
-    );
+    runWrangler([
+      "kv",
+      "key",
+      "put",
+      CATALOG_DISCOUNT_KEY,
+      String(discountPercent),
+      `--binding=${KV_BINDING}`,
+      "--remote",
+    ]);
 
     console.log(
       `[SYNC] catalog:discount actualizado en ${(
@@ -225,9 +299,15 @@ async function main() {
      */
 
     console.log("");
-    console.log("========================================");
-    console.log("   SYNC COMPLETADO");
-    console.log("========================================");
+    console.log(
+      "========================================"
+    );
+    console.log(
+      "   SYNC CATÁLOGO COMPLETADO"
+    );
+    console.log(
+      "========================================"
+    );
 
     console.log(
       `[SYNC] Productos: ${products.length}`
@@ -239,11 +319,14 @@ async function main() {
 
     console.log(
       `[SYNC] Tiempo total: ${(
-        performance.now() - start
+        performance.now() -
+        start
       ).toFixed(1)} ms`
     );
 
-    console.log("========================================");
+    console.log(
+      "========================================"
+    );
   } finally {
     await client.close(true);
 
@@ -253,12 +336,38 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error("");
-  console.error("========================================");
-  console.error("   ERROR EN SYNC");
-  console.error("========================================");
-  console.error(error);
+/*
+ * Permite ejecutar este archivo directamente:
+ *
+ * tsx scripts/sync-catalog-kv.ts
+ *
+ * o:
+ *
+ * tsx scripts/sync-catalog-kv.ts --env clickspro
+ */
+const isDirectExecution =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) ===
+    path.resolve(
+      new URL(import.meta.url).pathname
+    );
 
-  process.exit(1);
-});
+if (isDirectExecution) {
+  syncCatalogKv().catch(
+    (error) => {
+      console.error("");
+      console.error(
+        "========================================"
+      );
+      console.error(
+        "   ERROR EN SYNC"
+      );
+      console.error(
+        "========================================"
+      );
+      console.error(error);
+
+      process.exit(1);
+    }
+  );
+}

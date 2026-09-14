@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { STORE_NAME, STORE_TAGLINE } from "@/lib/store-config";
+import { STORE_INSTAGRAM_LINK, STORE_NAME, STORE_TAGLINE } from "@/lib/store-config";
 
 export default function Footer() {
   return (
@@ -113,7 +113,7 @@ export default function Footer() {
 
               {/* Instagram */}
               <a
-                href="https://www.instagram.com/soguenote/"
+                href={STORE_INSTAGRAM_LINK}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Seguinos en Instagram"

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { STORE_NAME } from "@/lib/store-config";
+import { STORE_INSTAGRAM_LINK, STORE_MERCADOLIBRE_LINK, STORE_NAME } from "@/lib/store-config";
 
 export default function ContactoPage() {
   const whatsappPhone =
@@ -29,7 +29,7 @@ export default function ContactoPage() {
             Instagram o acercarte a nuestro local. También podés
             encontrarnos en MercadoLibre como{" "}
             <strong className="font-bold text-zinc-900">
-              SOGUENOTE
+              {STORE_NAME}
             </strong>
             .
           </p>
@@ -95,11 +95,11 @@ export default function ContactoPage() {
 
               <p className="mt-2 font-proxima text-sm leading-6 text-zinc-600">
                 Seguinos para conocer nuestros productos, novedades
-                y publicaciones de SOGUENOTE.
+                y publicaciones de {STORE_NAME}.
               </p>
 
               <a
-                href="https://www.instagram.com/soguenote/"
+                href={STORE_INSTAGRAM_LINK}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Seguinos en Instagram"
@@ -236,7 +236,7 @@ export default function ContactoPage() {
 
                 <div>
                   <h2 className="font-proxima text-xl font-bold text-zinc-950">
-                    SOGUENOTE en MercadoLibre
+                    {STORE_NAME} en MercadoLibre
                   </h2>
 
                   <p className="mt-1 font-proxima text-sm text-zinc-600">
@@ -248,13 +248,13 @@ export default function ContactoPage() {
               <p className="mt-4 font-proxima text-sm leading-6 text-zinc-600">
                 Buscanos como{" "}
                 <strong className="font-bold text-zinc-950">
-                  SOGUENOTE
+                  {STORE_NAME}
                 </strong>{" "}
                 y encontrá nuestras publicaciones y productos.
               </p>
 
               <a
-                href="https://listado.mercadolibre.com.ar/_CustId_141336342"
+                href={STORE_MERCADOLIBRE_LINK}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-[#FFE600] px-5 py-3.5 font-proxima text-sm font-bold text-[#333333] transition hover:bg-[#F5D900] active:scale-[0.98]"
@@ -266,7 +266,7 @@ export default function ContactoPage() {
                   className="h-5 w-5"
                 />
 
-                Ver SOGUENOTE en MercadoLibre
+                Ver {STORE_NAME} en MercadoLibre
               </a>
             </section>
           </div>

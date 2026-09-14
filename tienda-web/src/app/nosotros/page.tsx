@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { STORE_NAME } from "@/lib/store-config";
+import { STORE_MERCADOLIBRE_LINK, STORE_NAME } from "@/lib/store-config";
 
 const values = [
   {
@@ -167,21 +167,21 @@ export default function NosotrosPage() {
             </p>
 
             <h2 className="mt-2 font-proxima text-3xl font-bold tracking-tight text-zinc-950">
-              SOGUENOTE en MercadoLibre
+              {STORE_NAME} en MercadoLibre
             </h2>
 
             <p className="mt-4 font-proxima text-base leading-7 text-zinc-600">
               Además de nuestra tienda online, podés encontrarnos en
               MercadoLibre como{" "}
               <strong className="font-bold text-zinc-950">
-                SOGUENOTE
+                {STORE_NAME}
               </strong>
               . Allí también publicamos nuestros productos y
               recibimos consultas.
             </p>
 
             <a
-              href="https://listado.mercadolibre.com.ar/_CustId_141336342"
+              href={STORE_MERCADOLIBRE_LINK}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#FFE600] px-5 py-3 font-proxima text-sm font-bold text-[#333333] transition hover:bg-[#F5D900] active:scale-[0.98]"
@@ -193,7 +193,7 @@ export default function NosotrosPage() {
                 className="h-5 w-5"
               />
 
-              Ver SOGUENOTE en MercadoLibre
+              Ver {STORE_NAME} en MercadoLibre
             </a>
           </div>
         </div>
