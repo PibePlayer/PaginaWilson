@@ -7,25 +7,29 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+
     "build:cloudflare": "opennextjs-cloudflare build",
+
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+
     "deploy": "npm run deploy:sogue",
+
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    
-    "build:sogue": "dotenv -e .env.sogue -- opennextjs-cloudflare build",
-    "build:clickspro": "dotenv -e .env.clickspro -- opennextjs-cloudflare build",
 
-    "preview:sogue": "dotenv -e .env.sogue -- opennextjs-cloudflare build && dotenv -e .env.sogue -- opennextjs-cloudflare preview",
-    "preview:clickspro": "dotenv -e .env.clickspro -- opennextjs-cloudflare build && dotenv -e .env.clickspro -- opennextjs-cloudflare preview --env clickspro",
-    
-    "deploy:sogue": "dotenv -e .env.sogue -- opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "deploy:clickspro": "dotenv -e .env.clickspro -- opennextjs-cloudflare build && opennextjs-cloudflare deploy --env clickspro",
+    "build:sogue": "dotenv -e .env.sogue -o -- opennextjs-cloudflare build",
+    "build:clickspro": "dotenv -e .env.clickspro -o -- opennextjs-cloudflare build",
 
-    "sync:kv:sogue": "dotenv -e .env.sogue -- tsx scripts/sync-catalog-kv.ts",
-    "sync:kv:clickspro": "dotenv -e .env.clickspro -- tsx scripts/sync-catalog-kv.ts --env clickspro",
+    "preview:sogue": "dotenv -e .env.sogue -o -- opennextjs-cloudflare build && npx wrangler dev",
+    "preview:clickspro": "dotenv -e .env.clickspro -o -- opennextjs-cloudflare build && npx wrangler dev --env clickspro",
 
-    "sync:sogue": "dotenv -e .env.sogue -- tsx scripts/sync-store.ts",
-    "sync:clickspro": "dotenv -e .env.clickspro -- tsx scripts/sync-store.ts --env clickspro"
+    "deploy:sogue": "dotenv -e .env.sogue -o -- opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:clickspro": "dotenv -e .env.clickspro -o -- opennextjs-cloudflare build && opennextjs-cloudflare deploy --env clickspro",
+
+    "sync:kv:sogue": "dotenv -e .env.sogue -o -- tsx scripts/sync-catalog-kv.ts",
+    "sync:kv:clickspro": "dotenv -e .env.clickspro -o -- tsx scripts/sync-catalog-kv.ts --env clickspro",
+
+    "sync:sogue": "dotenv -e .env.sogue -o -- tsx scripts/sync-store.ts",
+    "sync:clickspro": "dotenv -e .env.clickspro -o -- tsx scripts/sync-store.ts --env clickspro"
   },
   "dependencies": {
     "@microsoft/clarity": "^1.0.2",

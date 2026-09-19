@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { env } from "process";
 
 export async function GET() {
   const clientId = process.env.MERCADOLIBRE_CLIENT_ID;
   const redirectUri = process.env.MERCADOLIBRE_REDIRECT_URI;
+
+
+  console.log("ML CLIENT ID:", process.env.MERCADOLIBRE_CLIENT_ID);
+  console.log("ML REDIRECT URI:", process.env.MERCADOLIBRE_REDIRECT_URI);
+  console.log("ML REDIRECT URI:", env.MERCADOLIBRE_REDIRECT_URI);
 
   if (!clientId || !redirectUri) {
     return NextResponse.json(

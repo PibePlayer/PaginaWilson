@@ -50,6 +50,10 @@
     "clickspro": {
       "name": "tienda-web-clickspro",
 
+      "vars": {
+        "MERCADOLIBRE_REDIRECT_URI": "https://tienda-web-clickspro.pidal-mateo.workers.dev/api/auth/mercadolibre/callback"
+      },
+
       "kv_namespaces": [
         {
           "binding": "CATALOG_CACHE",

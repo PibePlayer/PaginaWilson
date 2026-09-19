@@ -5,6 +5,8 @@ import {
 
 import { requireAdminApi } from "@/lib/require-admin-api";
 import { withDatabase } from "@/lib/db";
+import { rebuildCatalogProducts } from "@/lib/catalog-cache";
+
 import type { Product } from "@/types/product";
 
 interface CategoryChange {
@@ -69,16 +71,12 @@ export async function POST(
     }
 
     const categories =
-      Array.isArray(
-        body.categories
-      )
+      Array.isArray(body.categories)
         ? body.categories
         : [];
 
     const featured =
-      Array.isArray(
-        body.featured
-      )
+      Array.isArray(body.featured)
         ? body.featured
         : [];
 
@@ -239,9 +237,7 @@ export async function POST(
       }
 
       const uniqueIds =
-        new Set(
-          featuredOrder
-        );
+        new Set(featuredOrder);
 
       if (
         uniqueIds.size !==
@@ -260,6 +256,9 @@ export async function POST(
       }
     }
 
+    /*
+     * Aplicar cambios en MongoDB
+     */
     await withDatabase(
       async (db) => {
         /*
@@ -468,6 +467,8 @@ export async function POST(
                     $set: {
                       featuredOrder:
                         index,
+                      updatedAt:
+                        new Date(),
                     },
                   },
                 },
@@ -516,12 +517,25 @@ export async function POST(
                     featuredOrder:
                       "",
                   },
+                  $set: {
+                    updatedAt:
+                      new Date(),
+                  },
                 }
               );
           }
         }
       }
     );
+
+    /*
+     * MongoDB ya está actualizado.
+     *
+     * Reconstruimos el KV desde Mongo para que
+     * el catálogo público vea inmediatamente
+     * los nuevos descuentos, destacados y orden.
+     */
+    await rebuildCatalogProducts();
 
     const response =
       NextResponse.json({

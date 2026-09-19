@@ -4,8 +4,12 @@ import {
 } from "next/server";
 
 import { requireAdminApi } from "@/lib/require-admin-api";
-import { withDatabase } from "@/lib/db";
-import { getMeliDiscountPercent } from "@/lib/settings";
+import {
+  getCachedCatalogProducts,
+  getCachedCatalogDiscount,
+  rebuildCatalogProducts,
+} from "@/lib/catalog-cache";
+
 import type { Product } from "@/types/product";
 
 export async function GET(
@@ -19,109 +23,100 @@ export async function GET(
   }
 
   try {
-    const result =
-      await withDatabase(async (db) => {
-        const products =
-          await db
-            .collection<Product>("products")
-            .find({
-              visible: true,
-            })
-            .sort({
-              featured: -1,
-              title: 1,
-            })
-            .toArray();
-
-        const globalDiscountPercent =
-          await getMeliDiscountPercent(db);
-
-        return {
-          products,
-          globalDiscountPercent,
-        };
-      });
-
-    const {
-      products,
-      globalDiscountPercent,
-    } = result;
-
-    const featuredProducts =
-      products
-        .filter(
-          (product) =>
-            product.featured
-        )
-        .sort((a, b) => {
-          const orderA =
-            a.featuredOrder ??
-            Number.MAX_SAFE_INTEGER;
-
-          const orderB =
-            b.featuredOrder ??
-            Number.MAX_SAFE_INTEGER;
-
-          if (orderA !== orderB) {
-            return orderA - orderB;
-          }
-
-          return a.title.localeCompare(
-            b.title,
-            "es"
-          );
-        });
-
-    const nonFeaturedProducts =
-      products.filter(
-        (product) =>
-          !product.featured
-      );
+    /*
+     * IMPORTANTE:
+     *
+     * No consultamos MongoDB desde este endpoint.
+     *
+     * El catálogo administrativo necesita los mismos
+     * productos visibles que ya tenemos almacenados en KV.
+     *
+     * La búsqueda y los filtros se realizan del lado
+     * del cliente en AdminFeatured.
+     */
+    const [
+      cachedProducts,
+      cachedDiscount,
+    ] = await Promise.all([
+      getCachedCatalogProducts(),
+      getCachedCatalogDiscount(),
+    ]);
 
     /*
-     * Los productos que todavía no tienen
-     * featuredOrder reciben un orden temporal.
+     * Si el cache todavía no existe, no hacemos fallback
+     * automático a Mongo.
      *
-     * No escribimos en Mongo desde el GET.
+     * Esto es intencional: este endpoint debe ser barato
+     * en CPU y no queremos que una ausencia de KV vuelva
+     * a disparar una consulta costosa a Mongo.
      */
-    const normalizedFeatured =
-      featuredProducts.map(
-        (product, index) => ({
-          ...product,
-          featuredOrder:
-            product.featuredOrder ??
-            index,
-        })
+    if (
+      cachedProducts === null ||
+      cachedDiscount === null
+    ) {
+      const response =
+        NextResponse.json(
+          {
+            success: false,
+            error:
+              "El cache del catálogo no está disponible. Ejecutá una sincronización del catálogo.",
+          },
+          {
+            status: 503,
+          }
+        );
+
+      await auth.refreshCookie(
+        response
       );
 
-    const orderedProducts = [
-      ...normalizedFeatured,
-      ...nonFeaturedProducts,
-    ];
+      return response;
+    }
 
+    /*
+     * El cliente ya se encarga de:
+     *
+     * - búsqueda por título
+     * - destacados
+     * - no destacados
+     * - descuentos particulares
+     * - orden visual de destacados
+     *
+     * Por lo tanto enviamos todos los productos visibles.
+     */
     const response =
       NextResponse.json({
         success: true,
-        globalDiscountPercent,
+        globalDiscountPercent:
+          cachedDiscount,
+
         products:
-          orderedProducts.map(
-            (product) => ({
+          cachedProducts.map(
+            (product: Product) => ({
               meliId:
                 product.meliId,
+
               title:
                 product.title,
+
               meliPrice:
                 product.meliPrice,
+
               meliDiscountedPrice:
                 product.meliDiscountedPrice,
+
               currencyId:
                 product.currencyId,
+
               availableQuantity:
                 product.availableQuantity,
+
               thumbnail:
                 product.thumbnail,
+
               featured:
                 product.featured,
+
               featuredOrder:
                 product.featured
                   ? product.featuredOrder
@@ -129,7 +124,10 @@ export async function GET(
 
               /*
                * IMPORTANTE:
-               * undefined significa "usar descuento global".
+               *
+               * undefined significa que el producto
+               * utiliza el descuento global.
+               *
                * No convertirlo a 0.
                */
               discountPercent:
@@ -209,6 +207,17 @@ export async function PATCH(
       );
     }
 
+    /*
+     * Este PATCH es un endpoint independiente del sistema
+     * de ApplyChanges.
+     *
+     * Si alguien lo utiliza, primero actualizamos Mongo
+     * y después reconstruimos el cache para que el catálogo
+     * público y AdminFeatured queden sincronizados.
+     */
+    const { withDatabase } =
+      await import("@/lib/db");
+
     const result =
       await withDatabase(async (db) =>
         db
@@ -239,6 +248,11 @@ export async function PATCH(
         }
       );
     }
+
+    /*
+     * Mantener KV sincronizado.
+     */
+    await rebuildCatalogProducts();
 
     const response =
       NextResponse.json({

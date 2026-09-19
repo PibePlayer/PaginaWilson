@@ -12,6 +12,7 @@ import type {
   ProductAttribute,
 } from "@/types/product";
 import type { Category } from "@/types/category";
+import { log } from "console";
 
 interface SearchResponse {
   seller_id: string;
@@ -378,6 +379,8 @@ async function getMercadoLibreItems(
         undefined,
         db
       );
+
+      //log("multiGet: %o", multiGet);
 
     for (const result of multiGet) {
       if (
